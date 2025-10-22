@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Mitarbeiterhandbuch (Next.js / Tailwind / shadcn)
 
-## Getting Started
+iFrame-ready Single-Page-App fuer das TC-Mitarbeiterhandbuch. Stack: Next.js (App Router, TypeScript), Tailwind CSS 3.x, shadcn/ui, lucide-react.
 
-First, run the development server:
+## Voraussetzungen
+
+- Node.js 20+
+- pnpm (`corepack enable pnpm`)
+
+## Projektstart
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Abhaengigkeiten installieren
+pnpm install
+
+# Entwicklung starten (http://localhost:3000)
 pnpm dev
-# or
-bun dev
+
+# Produktionsbuild erzeugen
+pnpm build
+
+# Linting ausfuehren
+pnpm lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Strukturueberblick
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `app/` - App Router Einstieg (`layout.tsx`, `page.tsx`)
+- `components/layout` - Shell (Sidebar, Buttons, ThemeProvider)
+- `components/logic/SectionRouter.client.tsx` - Hash-Navigation, History, iFrame-Resize
+- `components/sections` - Eine Datei pro Inhaltsbereich; Legacy-HTML via `RichText`
+- `components/menus` - CTA- und Landing-Komponenten fuer Untermenues
+- `components/home` - Startseite mit Suche und Inhaltsuebersicht
+- `lib/sectionMap.ts` - Metadaten, Parent/Child-Relationen, Navigationsreihenfolge
+- `lib/data.ts` - Abgeleitete Daten fuer Suche und Home-Grid
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Navigation & Suche
 
-## Learn More
+- `SectionRouter` liest den URL-Hash (`#slug`) und synchronisiert die Browser-History.
+- `SearchBox` durchsucht `sections` nach Titel/Keywords und navigiert ueber `goTo(slug)`.
+- Die Sidebar wird aus `sectionGroups` generiert und hebt aktive Parents hervor.
 
-To learn more about Next.js, take a look at the following resources:
+### Inhaltsdarstellung
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Mission, Kerngeschaeft und Menues sind handcodiert und nutzen shadcn-Komponenten.
+- Umfangreiche Legacy-Inhalte werden als HTML in `RichText` gerendert; globale Styles in `globals.css` regeln Typografie, Tabellen und Links.
+- Historische CSS-Variablen (`--primary-color`, `--primary-darker`, ...) sind weiterhin gesetzt, damit bestehende Utility-Klassen greifen.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## iFrame Integration
 
-## Deploy on Vercel
+- Kind (Next.js): `SectionRouter` sendet `{ type: 'handbook:height', height }` und hoert auf `handbook:set-theme`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Elternseite Beispiel:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```html
+<iframe
+  id="handbook"
+  src="https://YOUR-VERCEL-APP.vercel.app"
+  style="width:100%;border:0;"
+  loading="lazy"
+></iframe>
+<script>
+  (function () {
+    const frame = document.getElementById('handbook');
+    window.addEventListener('message', (event) => {
+      if (event?.data?.type === 'handbook:height' && Number.isFinite(event.data.height)) {
+        frame.style.height = event.data.height + 'px';
+      }
+    });
+    // Beispiel fuer Theme-Forwarding:
+    function setTheme(mode) {
+      frame.contentWindow?.postMessage({ type: 'handbook:set-theme', mode }, '*');
+    }
+    // setTheme('dark');
+  })();
+</script>
+```
+
+`vercel.json` liefert einen CSP-Header mit `frame-ancestors 'self' https://example.com`. Domain bei Deploy anpassen.
+
+## Deployment
+
+1. `pnpm build`
+2. Deploy (z. B. Vercel)
+3. `frame-ancestors` auf Ziel-Domain setzen
+4. Einbettung testen (Resize, Hash-Navigation, Theme-Forwarding)
+
+## Nuetzliche Links
+
+- [Next.js App Router Docs](https://nextjs.org/docs/app)
+- [shadcn/ui](https://ui.shadcn.com)
+- [Tailwind CSS 3.x](https://tailwindcss.com/docs)
