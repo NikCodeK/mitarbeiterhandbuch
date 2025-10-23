@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useState } from "react"
+import { FormEvent, Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 
-export default function AdminLoginPage() {
+function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [username, setUsername] = useState("")
@@ -48,6 +48,46 @@ export default function AdminLoginPage() {
   }
 
   return (
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="username">
+          Benutzername
+        </label>
+        <Input
+          id="username"
+          autoComplete="username"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="password">
+          Passwort
+        </label>
+        <Input
+          id="password"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          required
+        />
+      </div>
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+      <Button className="w-full" type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Wird eingeloggt ..." : "Einloggen"}
+      </Button>
+    </form>
+  )
+}
+
+export default function AdminLoginPage() {
+  return (
     <main className="min-h-dvh bg-background px-4 py-12">
       <div className="mx-auto grid w-full max-w-sm place-items-center">
         <Card className="w-full">
@@ -56,41 +96,15 @@ export default function AdminLoginPage() {
             <CardDescription>Melde dich mit deinen Zugangsdaten an.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="username">
-                  Benutzername
-                </label>
-                <Input
-                  id="username"
-                  autoComplete="username"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="password">
-                  Passwort
-                </label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                />
-              </div>
-              {error && (
-                <p className="text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-              )}
-              <Button className="w-full" type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Wird eingeloggt ..." : "Einloggen"}
-              </Button>
-            </form>
+            <Suspense
+              fallback={
+                <div className="text-sm text-muted-foreground">
+                  Lade Loginformular ...
+                </div>
+              }
+            >
+              <LoginForm />
+            </Suspense>
           </CardContent>
         </Card>
       </div>
