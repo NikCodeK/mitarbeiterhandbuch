@@ -47,7 +47,6 @@ export default function MitarbeiterGespraecheMenuSection({
         items={conversationItems.map((item) => ({
           slug: item.slug,
           title: sections[item.slug]?.title ?? item.slug,
-          description: item.description,
         }))}
         onSelect={goTo}
       />

@@ -7,7 +7,6 @@ import { SubCategoryButton } from '@/components/menus/SubCategoryButton';
 type SectionMenuItem = {
   slug: SectionSlug;
   title: string;
-  description?: string;
 };
 
 type SectionMenuProps = {
@@ -29,13 +28,12 @@ export default function SectionMenu({
         <h2 className="text-3xl font-semibold tracking-tight">{title}</h2>
         <p className="text-sm text-muted-foreground sm:text-base">{intro}</p>
       </header>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3">
         {items.map((item) => (
           <SubCategoryButton
             key={item.slug}
             slug={item.slug}
             title={item.title}
-            description={item.description}
             onSelect={onSelect}
           />
         ))}
