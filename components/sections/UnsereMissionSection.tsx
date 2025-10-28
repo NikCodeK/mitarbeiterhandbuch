@@ -1,5 +1,12 @@
+'use client';
+
+import { FormEvent, useState } from 'react';
+import { Pencil } from 'lucide-react';
+
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import type { SectionComponentProps } from '@/components/sections/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const stories = [
   {
@@ -49,6 +56,9 @@ const stories = [
   },
 ];
 
+type StoryContent = (typeof stories)[number];
+type StoryItem = StoryContent & { id: number };
+
 const principles = [
   {
     title: 'Wir handeln im Sinne des Unternehmens',
@@ -77,13 +87,122 @@ const principles = [
   },
 ];
 
-export default function UnsereMissionSection({ slug, meta }: SectionComponentProps) {
+export default function UnsereMissionSection({
+  slug,
+  meta,
+  isAdmin = false,
+}: SectionComponentProps) {
+  const [currentTitle, setCurrentTitle] = useState(meta.title);
+  const [titleDraft, setTitleDraft] = useState(meta.title);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+
+  const [storyItems, setStoryItems] = useState<StoryItem[]>(() =>
+    stories.map((story, index) => ({ ...story, id: index })),
+  );
+  const [editingStoryIndex, setEditingStoryIndex] = useState<number | null>(null);
+  const [storyDraft, setStoryDraft] = useState('');
+
+  const isTitleDraftValid = titleDraft.trim().length > 0;
+  const isStoryDraftValid = storyDraft.trim().length > 0;
+
+  function startTitleEdit() {
+    setTitleDraft(currentTitle);
+    setIsEditingTitle(true);
+  }
+
+  function cancelTitleEdit() {
+    setTitleDraft(currentTitle);
+    setIsEditingTitle(false);
+  }
+
+  function handleTitleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isTitleDraftValid) {
+      return;
+    }
+    setCurrentTitle(titleDraft.trim());
+    setIsEditingTitle(false);
+  }
+
+  function startStoryEdit(index: number) {
+    if (!isAdmin) {
+      return;
+    }
+    const story = storyItems[index];
+    if (!story) {
+      return;
+    }
+    setStoryDraft(story.title);
+    setEditingStoryIndex(index);
+  }
+
+  function cancelStoryEdit() {
+    setEditingStoryIndex(null);
+    setStoryDraft('');
+  }
+
+  function handleStorySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (editingStoryIndex === null || !isStoryDraftValid) {
+      return;
+    }
+    const nextTitle = storyDraft.trim();
+    setStoryItems((prev) =>
+      prev.map((story, idx) =>
+        idx === editingStoryIndex ? { ...story, title: nextTitle } : story,
+      ),
+    );
+    setEditingStoryIndex(null);
+    setStoryDraft('');
+  }
+
   return (
     <section id={slug} className="space-y-8">
       <header className="space-y-3">
-        <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          {meta.title}
-        </h2>
+        {isEditingTitle ? (
+          <form
+            className="flex flex-col gap-3 sm:flex-row sm:items-center"
+            onSubmit={handleTitleSubmit}
+          >
+            <Input
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.currentTarget.value)}
+              className="w-full sm:max-w-md"
+              aria-label="Abschnittstitel bearbeiten"
+              autoFocus
+            />
+            <div className="flex items-center gap-2">
+              <Button size="sm" type="submit" disabled={!isTitleDraftValid}>
+                Speichern
+              </Button>
+              <Button
+                size="sm"
+                type="button"
+                variant="ghost"
+                onClick={cancelTitleEdit}
+              >
+                Abbrechen
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              {currentTitle}
+            </h2>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={startTitleEdit}
+                aria-label="Überschrift bearbeiten"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+        )}
         <p className="text-base text-muted-foreground">
           Wir sind der Funding-Partner für Unternehmen: ein Expertenteam, das mit
           Leichtigkeit, Freude und Respekt inspirierend zusammenarbeitet, um
@@ -98,12 +217,56 @@ export default function UnsereMissionSection({ slug, meta }: SectionComponentPro
           </AccordionTrigger>
           <AccordionContent>
             <ul className="space-y-4 text-sm leading-relaxed">
-              {stories.map((story) => (
-                <li key={story.title}>
-                  <p className="font-semibold text-foreground">{story.title}</p>
-                  <p className="text-muted-foreground">{story.description}</p>
-                </li>
-              ))}
+              {storyItems.map((story, index) => {
+                const isEditingStory = editingStoryIndex === index;
+                return (
+                  <li key={story.id} className="space-y-1">
+                    {isEditingStory ? (
+                      <form
+                        className="flex flex-col gap-3 sm:flex-row sm:items-center"
+                        onSubmit={handleStorySubmit}
+                      >
+                        <Input
+                          value={storyDraft}
+                          onChange={(event) => setStoryDraft(event.currentTarget.value)}
+                          className="w-full sm:max-w-md"
+                          aria-label={`Überschrift für ${story.title} bearbeiten`}
+                          autoFocus
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" type="submit" disabled={!isStoryDraftValid}>
+                            Speichern
+                          </Button>
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                            onClick={cancelStoryEdit}
+                          >
+                            Abbrechen
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <p className="flex-1 font-semibold text-foreground">{story.title}</p>
+                        {isAdmin && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => startStoryEdit(index)}
+                            aria-label={`Überschrift ${story.title} bearbeiten`}
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    <p className="text-muted-foreground">{story.description}</p>
+                  </li>
+                );
+              })}
             </ul>
           </AccordionContent>
         </AccordionItem>

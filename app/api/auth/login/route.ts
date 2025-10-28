@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { createSessionToken } from "@/lib/auth"
 
-const DEFAULT_USERNAME = "AD"
+const DEFAULT_USERNAME = "admin"
 const DEFAULT_PASSWORD = "admin123"
 const COOKIE_NAME = "admin_session"
 

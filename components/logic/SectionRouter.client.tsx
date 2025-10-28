@@ -241,7 +241,7 @@ export function useSectionRouter() {
   return ctx;
 }
 
-export function SectionRenderer() {
+export function SectionRenderer({ isAdmin = false }: { isAdmin?: boolean } = {}) {
   const { active, goTo, goBack } = useSectionRouter();
   const Component =
     sectionComponents[active] ?? sectionComponents['home'];
@@ -251,7 +251,15 @@ export function SectionRenderer() {
     return null;
   }
 
-  return <Component slug={active} meta={meta} goTo={goTo} goBack={goBack} />;
+  return (
+    <Component
+      slug={active}
+      meta={meta}
+      goTo={goTo}
+      goBack={goBack}
+      isAdmin={isAdmin}
+    />
+  );
 }
 
 export const topLevelSections = sectionGroups.map((group) => group.slug);

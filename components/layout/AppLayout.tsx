@@ -94,7 +94,7 @@ export default function AppLayout({ isAdmin = false }: AppLayoutProps) {
               </div>
             )}
             <BackButton />
-            <SectionRenderer />
+            <SectionRenderer isAdmin={isAdmin} />
           </div>
         </main>
       </div>

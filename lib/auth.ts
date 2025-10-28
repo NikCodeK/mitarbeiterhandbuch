@@ -9,15 +9,25 @@ interface CachedKey {
 
 let cachedKey: CachedKey | null = null
 
-function requireSecret() {
-  const secret = process.env.APP_SECRET?.trim()
+function resolveSecret(optional = false): string | null {
+  const secret = process.env.APP_SECRET?.trim() ?? ""
   if (!secret) {
+    if (optional) {
+      return null
+    }
     throw new Error("APP_SECRET environment variable is not set.")
   }
   if (secret.length < 32) {
+    if (optional) {
+      return null
+    }
     throw new Error("APP_SECRET must be at least 32 characters long.")
   }
   return secret
+}
+
+function requireSecret() {
+  return resolveSecret()!
 }
 
 function getSubtleCrypto() {
@@ -80,7 +90,10 @@ export async function sign(value: string) {
 }
 
 export async function verify(signed: string): Promise<AdminSession | null> {
-  const secret = requireSecret()
+  const secret = resolveSecret(true)
+  if (!secret) {
+    return null
+  }
   const idx = signed.lastIndexOf(".")
   if (idx < 0) {
     return null

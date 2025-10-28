@@ -5,4 +5,5 @@ export type SectionComponentProps = {
   meta: SectionMeta;
   goTo: (slug: SectionSlug) => void;
   goBack: () => void;
+  isAdmin?: boolean;
 };
