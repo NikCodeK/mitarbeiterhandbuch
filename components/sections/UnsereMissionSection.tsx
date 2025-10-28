@@ -59,6 +59,9 @@ const stories = [
 type StoryContent = (typeof stories)[number];
 type StoryItem = StoryContent & { id: number };
 
+const introParagraph =
+  'Wir sind der Funding-Partner für Unternehmen: ein Expertenteam, das mit Leichtigkeit, Freude und Respekt inspirierend zusammenarbeitet, um wirkungsvolle Innovationen zu ermöglichen.';
+
 const principles = [
   {
     title: 'Wir handeln im Sinne des Unternehmens',
@@ -99,11 +102,17 @@ export default function UnsereMissionSection({
   const [storyItems, setStoryItems] = useState<StoryItem[]>(() =>
     stories.map((story, index) => ({ ...story, id: index })),
   );
+  const [currentIntro, setCurrentIntro] = useState(introParagraph);
+  const [introDraft, setIntroDraft] = useState(introParagraph);
+  const [isEditingIntro, setIsEditingIntro] = useState(false);
   const [editingStoryIndex, setEditingStoryIndex] = useState<number | null>(null);
-  const [storyDraft, setStoryDraft] = useState('');
+  const [storyDraftTitle, setStoryDraftTitle] = useState('');
+  const [storyDraftDescription, setStoryDraftDescription] = useState('');
 
   const isTitleDraftValid = titleDraft.trim().length > 0;
-  const isStoryDraftValid = storyDraft.trim().length > 0;
+  const isIntroDraftValid = introDraft.trim().length > 0;
+  const isStoryDraftValid =
+    storyDraftTitle.trim().length > 0 && storyDraftDescription.trim().length > 0;
 
   function startTitleEdit() {
     setTitleDraft(currentTitle);
@@ -132,13 +141,15 @@ export default function UnsereMissionSection({
     if (!story) {
       return;
     }
-    setStoryDraft(story.title);
+    setStoryDraftTitle(story.title);
+    setStoryDraftDescription(story.description);
     setEditingStoryIndex(index);
   }
 
   function cancelStoryEdit() {
     setEditingStoryIndex(null);
-    setStoryDraft('');
+    setStoryDraftTitle('');
+    setStoryDraftDescription('');
   }
 
   function handleStorySubmit(event: FormEvent<HTMLFormElement>) {
@@ -146,14 +157,37 @@ export default function UnsereMissionSection({
     if (editingStoryIndex === null || !isStoryDraftValid) {
       return;
     }
-    const nextTitle = storyDraft.trim();
+    const nextTitle = storyDraftTitle.trim();
+    const nextDescription = storyDraftDescription.trim();
     setStoryItems((prev) =>
       prev.map((story, idx) =>
-        idx === editingStoryIndex ? { ...story, title: nextTitle } : story,
+        idx === editingStoryIndex
+          ? { ...story, title: nextTitle, description: nextDescription }
+          : story,
       ),
     );
     setEditingStoryIndex(null);
-    setStoryDraft('');
+    setStoryDraftTitle('');
+    setStoryDraftDescription('');
+  }
+
+  function startIntroEdit() {
+    setIntroDraft(currentIntro);
+    setIsEditingIntro(true);
+  }
+
+  function cancelIntroEdit() {
+    setIntroDraft(currentIntro);
+    setIsEditingIntro(false);
+  }
+
+  function handleIntroSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isIntroDraftValid) {
+      return;
+    }
+    setCurrentIntro(introDraft.trim());
+    setIsEditingIntro(false);
   }
 
   return (
@@ -203,11 +237,49 @@ export default function UnsereMissionSection({
             )}
           </div>
         )}
-        <p className="text-base text-muted-foreground">
-          Wir sind der Funding-Partner für Unternehmen: ein Expertenteam, das mit
-          Leichtigkeit, Freude und Respekt inspirierend zusammenarbeitet, um
-          wirkungsvolle Innovationen zu ermöglichen.
-        </p>
+        {isEditingIntro ? (
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={handleIntroSubmit}
+          >
+            <textarea
+              value={introDraft}
+              onChange={(event) => setIntroDraft(event.currentTarget.value)}
+              className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              aria-label="Einleitenden Text bearbeiten"
+            />
+            <div className="flex items-center gap-2">
+              <Button size="sm" type="submit" disabled={!isIntroDraftValid}>
+                Speichern
+              </Button>
+              <Button
+                size="sm"
+                type="button"
+                variant="ghost"
+                onClick={cancelIntroEdit}
+              >
+                Abbrechen
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex items-start gap-2">
+            <p className="flex-1 text-base text-muted-foreground">
+              {currentIntro}
+            </p>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={startIntroEdit}
+                aria-label="Einleitenden Text bearbeiten"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+        )}
       </header>
 
       <Accordion type="multiple" className="space-y-4">
@@ -222,16 +294,19 @@ export default function UnsereMissionSection({
                 return (
                   <li key={story.id} className="space-y-1">
                     {isEditingStory ? (
-                      <form
-                        className="flex flex-col gap-3 sm:flex-row sm:items-center"
-                        onSubmit={handleStorySubmit}
-                      >
+                      <form className="space-y-3" onSubmit={handleStorySubmit}>
                         <Input
-                          value={storyDraft}
-                          onChange={(event) => setStoryDraft(event.currentTarget.value)}
-                          className="w-full sm:max-w-md"
+                          value={storyDraftTitle}
+                          onChange={(event) => setStoryDraftTitle(event.currentTarget.value)}
+                          className="w-full"
                           aria-label={`Überschrift für ${story.title} bearbeiten`}
                           autoFocus
+                        />
+                        <textarea
+                          value={storyDraftDescription}
+                          onChange={(event) => setStoryDraftDescription(event.currentTarget.value)}
+                          className="min-h-[140px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          aria-label={`Beschreibung für ${story.title} bearbeiten`}
                         />
                         <div className="flex items-center gap-2">
                           <Button size="sm" type="submit" disabled={!isStoryDraftValid}>
