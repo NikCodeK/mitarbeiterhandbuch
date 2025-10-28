@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import type { Entry, Parent } from "@/lib/types"
+import type { Entry, Parent } from "../../lib/types"
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false })
 
