@@ -6,7 +6,7 @@ import "@uiw/react-markdown-preview/markdown.css"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, Suspense } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -53,7 +53,7 @@ const emptyEntryForm: EntryFormState = {
 
 const statusOptions: Entry["status"][] = ["Draft", "Published"]
 
-export default function AdminDashboardPage() {
+function AdminDashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -872,5 +872,13 @@ export default function AdminDashboardPage() {
         </CardContent>
       </Card>
     </main>
+  )
+}
+
+export default function AdminDashboardPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AdminDashboardContent />
+    </Suspense>
   )
 }
