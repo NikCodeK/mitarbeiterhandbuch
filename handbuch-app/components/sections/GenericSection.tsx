@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft, LayoutList, Pencil, Plus } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import MarkdownPreview from '@uiw/react-markdown-preview';
 
 import type { Entry, Parent } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -158,7 +158,7 @@ export default function GenericSection({
               )}
             </div>
             <div className="prose prose-sm mt-6 max-w-none text-muted-foreground md:prose-base">
-              <ReactMarkdown>{entry.content_md ?? ''}</ReactMarkdown>
+              <MarkdownPreview source={entry.content_md ?? ''} className="bg-transparent" />
             </div>
           </article>
         ))}
