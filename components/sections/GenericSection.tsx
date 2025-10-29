@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeft, LayoutList, Pencil, Plus } from 'lucide-react';
 import MarkdownPreview from '@uiw/react-markdown-preview';
-import '@uiw/react-markdown-preview/dist/markdown.css';
+import '@uiw/react-markdown-preview/markdown.css';
 
 import type { Entry, Parent } from '../../lib/types';
 import { cn } from '../../lib/utils';
