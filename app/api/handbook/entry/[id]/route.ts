@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { atGet, atUpdate } from '../../../../../lib/airtable';
-import type { Entry } from '../../../../../lib/types';
-import { verify } from '../../../../../lib/auth';
+import { atGet, atUpdate } from '@/lib/airtable';
+import type { Entry } from '@/lib/types';
+import { verify } from '@/lib/auth';
 
 type AirtableEntry = {
   id?: string;
@@ -43,36 +43,27 @@ async function readAdminSession(req: Request) {
   }
 }
 
-function mapRecord(record: AirtableEntry): Entry {
-  const parentField = record.fields?.parent;
-  const parentId = Array.isArray(parentField)
-    ? parentField[0]
-    : parentField;
-  const parentSlugField = record.fields?.parent_slug;
-  const parentSlug = Array.isArray(parentSlugField)
-    ? parentSlugField[0]
-    : typeof parentSlugField === 'string'
-      ? parentSlugField
-      : undefined;
-
-  return {
-    id: record.id ?? '',
-    parentId: parentId ?? '',
-    parentSlug,
-    slug: record.fields?.slug ?? '',
-    title: record.fields?.title ?? '',
-    content_md: record.fields?.content_md,
-    sort: record.fields?.sort,
-    status: record.fields?.status as Entry['status'],
-  };
-}
-
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(_request: Request, context: { params: { id: string } }) {
   try {
-    const { id } = await context.params;
     const table = ensureTableName(process.env.AIRTABLE_ENTRIES, 'AIRTABLE_ENTRIES');
-    const record = await atGet<AirtableEntry>(table, id);
-    const entry = mapRecord(record);
+    const record = await atGet<AirtableEntry>(table, context.params.id);
+
+    const parentField = record.fields?.parent;
+    const parentId = Array.isArray(parentField)
+      ? parentField[0]
+      : parentField;
+
+    const entry: Entry = {
+      id: record.id ?? '',
+      parentId: parentId ?? '',
+      parentSlug: record.fields?.parent_slug,
+      slug: record.fields?.slug ?? '',
+      title: record.fields?.title ?? '',
+      content_md: record.fields?.content_md,
+      sort: record.fields?.sort,
+      status: record.fields?.status as Entry['status'],
+    };
+
     return NextResponse.json({ entry });
   } catch (error) {
     console.error('[entry] failed to load record', error);
@@ -89,14 +80,12 @@ type EntryPayload = {
   parentId?: string;
 };
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, context: { params: { id: string } }) {
   try {
     const session = await readAdminSession(request);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id } = await context.params;
 
     let payload: EntryPayload = {};
     try {
@@ -109,7 +98,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const table = ensureTableName(process.env.AIRTABLE_ENTRIES, 'AIRTABLE_ENTRIES');
     const fields: Record<string, unknown> = {};
 
-    // slug field doesn't exist in Airtable - it's computed as parent_slug
+    if (slug !== undefined && process.env.AIRTABLE_ENTRY_SLUG_FIELD) {
+      fields[process.env.AIRTABLE_ENTRY_SLUG_FIELD] = slug;
+    }
     if (title !== undefined) fields.title = title;
     if (content_md !== undefined) fields.content_md = content_md;
     if (sort !== undefined) fields.sort = sort;
@@ -118,8 +109,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       fields.parent = parentId ? [parentId] : [];
     }
 
-    await atUpdate(table, id, fields);
-    return NextResponse.json({ ok: true, id });
+    await atUpdate(table, context.params.id, fields);
+    return NextResponse.json({ ok: true, id: context.params.id });
   } catch (error) {
     console.error('[entry] failed to save record', error);
     return NextResponse.json({ error: 'Unable to save entry' }, { status: 500 });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { atList } from '../../../../lib/airtable';
+import { atList } from '@/lib/airtable';
 
 function requireEnv(key: string) {
   const value = process.env[key];
@@ -24,8 +24,12 @@ export async function GET() {
       maxRecords: 1,
     });
 
-    const parentsCount = Array.isArray(parentsResponse.records) ? parentsResponse.records.length : 0;
-    const entriesCount = Array.isArray(entriesResponse.records) ? entriesResponse.records.length : 0;
+    const parentsCount = Array.isArray(parentsResponse.records)
+      ? parentsResponse.records.length
+      : 0;
+    const entriesCount = Array.isArray(entriesResponse.records)
+      ? entriesResponse.records.length
+      : 0;
 
     return NextResponse.json({
       ok: true,
@@ -33,8 +37,8 @@ export async function GET() {
       entries: { table: entriesTable, sampleCount: entriesCount },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[health] Airtable connectivity check failed', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

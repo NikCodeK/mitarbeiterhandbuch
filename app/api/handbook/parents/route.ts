@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { atCreate, atList, atUpdate } from '../../../../lib/airtable';
-import type { Parent } from '../../../../lib/types';
-import { verify } from '../../../../lib/auth';
+import { atCreate, atList, atUpdate } from '@/lib/airtable';
+import type { Parent } from '@/lib/types';
+import { verify } from '@/lib/auth';
 
 type AirtableRecord = {
   id: string;
@@ -43,7 +43,9 @@ async function readAdminSession(req: Request) {
 export async function GET() {
   try {
     const table = ensureTableName(process.env.AIRTABLE_PARENTS, 'AIRTABLE_PARENTS');
-    const { records } = await atList<{ records: AirtableRecord[] }>(table);
+    const { records } = await atList<{ records: AirtableRecord[] }>(table, {
+      sort: '[{"field":"sort","direction":"asc"}]',
+    });
 
     const parents: Parent[] = (records ?? [])
       .map((record) => ({
