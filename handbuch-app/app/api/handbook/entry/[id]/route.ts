@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { atGet, atUpdate } from '@/lib/airtable';
-import type { Entry } from '@/lib/types';
-import { verify } from '@/lib/auth';
+import { atGet, atUpdate } from '../../../../../lib/airtable';
+import type { Entry } from '../../../../../lib/types';
+import { verify } from '../../../../../lib/auth';
 
 type AirtableEntry = {
   id?: string;

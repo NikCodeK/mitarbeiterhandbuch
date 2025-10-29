@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-import { atUpdate } from '@/lib/airtable';
-import { verify } from '@/lib/auth';
+import { atUpdate } from '../../../../lib/airtable';
+import { verify } from '../../../../lib/auth';
 
 const PARENT_TABLE = process.env.AIRTABLE_PARENTS;
 const ENTRY_TABLE = process.env.AIRTABLE_ENTRIES;
