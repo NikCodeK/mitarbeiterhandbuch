@@ -41,6 +41,13 @@ async function readAdminSession(req: Request) {
 }
 
 export async function GET() {
+  const debugEnv = {
+    hasApiKey: Boolean(process.env.AIRTABLE_API_KEY),
+    hasBaseId: Boolean(process.env.AIRTABLE_BASE_ID),
+    parentsTable: process.env.AIRTABLE_PARENTS,
+  };
+  console.log('[parents] env status', debugEnv);
+
   try {
     const table = ensureTableName(process.env.AIRTABLE_PARENTS, 'AIRTABLE_PARENTS');
     const { records } = await atList<{ records: AirtableRecord[] }>(table, {
@@ -66,7 +73,7 @@ export async function GET() {
       : typeof error === 'string'
         ? error
         : JSON.stringify(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message, debug: { env: 'parents', hasApiKey: Boolean(process.env.AIRTABLE_API_KEY), hasBaseId: Boolean(process.env.AIRTABLE_BASE_ID), parentsTable: process.env.AIRTABLE_PARENTS } }, { status: 500 });
   }
 }
 

@@ -93,6 +93,13 @@ function mapRecord(record: AirtableEntryRecord): Entry {
 }
 
 export async function GET(request: Request) {
+  const debugEnv = {
+    hasApiKey: Boolean(process.env.AIRTABLE_API_KEY),
+    hasBaseId: Boolean(process.env.AIRTABLE_BASE_ID),
+    entriesTable: process.env.AIRTABLE_ENTRIES,
+  };
+  console.log('[entries] env status', debugEnv);
+
   try {
     const parentSlug = new URL(request.url).searchParams.get('parent') ?? undefined;
     const session = await readAdminSession(request);
@@ -121,7 +128,10 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('[entries] failed to load data', error);
     const message = error instanceof Error ? error.message : 'Unable to load entries';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({
+      error: message,
+      debug: { env: 'entries', hasApiKey: Boolean(process.env.AIRTABLE_API_KEY), hasBaseId: Boolean(process.env.AIRTABLE_BASE_ID), entriesTable: process.env.AIRTABLE_ENTRIES },
+    }, { status: 500 });
   }
 }
 

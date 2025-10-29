@@ -12,6 +12,13 @@ function requireEnv(key: string) {
 
 export async function GET() {
   try {
+    console.log('[health] env status', {
+      hasApiKey: Boolean(process.env.AIRTABLE_API_KEY),
+      hasBaseId: Boolean(process.env.AIRTABLE_BASE_ID),
+      parentsTable: process.env.AIRTABLE_PARENTS,
+      entriesTable: process.env.AIRTABLE_ENTRIES,
+    });
+
     requireEnv('AIRTABLE_API_KEY');
     requireEnv('AIRTABLE_BASE_ID');
     const parentsTable = requireEnv('AIRTABLE_PARENTS');
