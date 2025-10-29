@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 
-import AppLayout from '@/components/layout/AppLayout';
-import { verify } from '@/lib/auth';
+import AppLayout from '../components/layout/AppLayout';
+import { verify } from '../lib/auth';
 
 export const dynamic = 'force-dynamic';
 

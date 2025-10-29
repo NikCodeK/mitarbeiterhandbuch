@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import GenericSection from '@/components/sections/GenericSection';
-import type { Entry, Parent } from '@/lib/types';
+import GenericSection from '../sections/GenericSection';
+import type { Entry, Parent } from '../../lib/types';
 
 type ParentResponse = { parents?: Parent[] };
 type EntriesResponse = { entries?: Entry[] };

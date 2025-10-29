@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { atCreate, atList, atUpdate } from '@/lib/airtable';
-import type { Parent } from '@/lib/types';
-import { verify } from '@/lib/auth';
+import { atCreate, atList, atUpdate } from '../../../lib/airtable';
+import type { Parent } from '../../../lib/types';
+import { verify } from '../../../lib/auth';
 
 type AirtableRecord = {
   id: string;

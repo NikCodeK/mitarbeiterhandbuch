@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { atList } from '@/lib/airtable';
+import { atList } from '../../../lib/airtable';
 
 function requireEnv(key: string) {
   const value = process.env[key];

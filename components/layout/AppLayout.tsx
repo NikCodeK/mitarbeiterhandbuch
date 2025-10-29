@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import SectionRouter from '@/components/logic/SectionRouter.client';
-import ScrollToTopButton from '@/components/layout/ScrollToTopButton';
-import { Button } from '@/components/ui/button';
+import SectionRouter from '../logic/SectionRouter.client';
+import ScrollToTopButton from './ScrollToTopButton';
+import { Button } from '../ui/button';
 
 interface AppLayoutProps {
   isAdmin?: boolean;
