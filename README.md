@@ -25,26 +25,19 @@ pnpm lint
 
 ## Strukturueberblick
 
-- `app/` - App Router Einstieg (`layout.tsx`, `page.tsx`)
-- `components/layout` - Shell (Sidebar, Buttons, ThemeProvider)
-- `components/logic/SectionRouter.client.tsx` - Hash-Navigation, History, iFrame-Resize
-- `components/sections` - Eine Datei pro Inhaltsbereich; Legacy-HTML via `RichText`
-- `components/menus` - CTA- und Landing-Komponenten fuer Untermenues
-- `components/home` - Startseite mit Suche und Inhaltsuebersicht
-- `lib/sectionMap.ts` - Metadaten, Parent/Child-Relationen, Navigationsreihenfolge
-- `lib/data.ts` - Abgeleitete Daten fuer Suche und Home-Grid
+- `app/` - App Router Einstieg (`layout.tsx`, `page.tsx`) sowie Airtable-APIs unter `app/api/handbook/*`.
+- `components/layout` - Shell (Header, Admin-Buttons, ThemeProvider).
+- `components/logic/SectionRouter.client.tsx` - Holt Parents/Entries aus den API-Routen, synchronisiert URL-Hash, triggert iFrame-Resize.
+- `components/sections/GenericSection.tsx` - Rendert Tabs für Parents und Markdown-Inhalte aus Airtable.
+- `lib/airtable.ts` - Thin Airtable REST-Client (List/Create/Update/Get).
+- `lib/types.ts` - Gemeinsame Typen für Parents und Entries.
+- `scripts/check-airtable.mjs` - CLI-Check, der prüft, ob Airtable-Base sowie Tabellen erreichbar sind (`pnpm check:airtable`).
 
-### Navigation & Suche
+### Navigation & Inhalte
 
-- `SectionRouter` liest den URL-Hash (`#slug`) und synchronisiert die Browser-History.
-- `SearchBox` durchsucht `sections` nach Titel/Keywords und navigiert ueber `goTo(slug)`.
-- Die Sidebar wird aus `sectionGroups` generiert und hebt aktive Parents hervor.
-
-### Inhaltsdarstellung
-
-- Mission, Kerngeschaeft und Menues sind handcodiert und nutzen shadcn-Komponenten.
-- Umfangreiche Legacy-Inhalte werden als HTML in `RichText` gerendert; globale Styles in `globals.css` regeln Typografie, Tabellen und Links.
-- Historische CSS-Variablen (`--primary-color`, `--primary-darker`, ...) sind weiterhin gesetzt, damit bestehende Utility-Klassen greifen.
+- `SectionRouter` liest den URL-Hash (`#slug`), lädt Parents & Einträge aus Airtable und cached die Resultate.
+- Inaktive oder unveröffentlichte Parents werden herausgefiltert; Einträge erscheinen als Markdown (`ReactMarkdown`) in Kartenlayout.
+- Resize-Observer sendet die aktuelle Höhe an den Elternframe (`postMessage`), Theme-Wechsel wird über Nachrichten entgegengenommen.
 
 ## iFrame Integration
 
