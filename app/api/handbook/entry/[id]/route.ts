@@ -1,8 +1,9 @@
+import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { atGet, atUpdate } from '@/lib/airtable';
-import type { Entry } from '@/lib/types';
 import { verify } from '@/lib/auth';
+import type { Entry } from '@/lib/types';
 
 type AirtableEntry = {
   id?: string;
@@ -24,34 +25,27 @@ function ensureTableName(envValue: string | undefined, fallbackName: string) {
   return envValue;
 }
 
-async function readAdminSession(req: Request) {
-  const cookies = req.headers.get('cookie') || '';
-  const cookie = cookies
-    .split(';')
-    .map((item) => item.trim())
-    .find((item) => item.startsWith('admin_session='));
-
-  if (!cookie) {
+async function readAdminSession(req: NextRequest) {
+  const value = req.cookies.get('admin_session')?.value;
+  if (!value) {
     return null;
   }
 
   try {
-    const value = decodeURIComponent(cookie.split('=')[1] ?? '');
     return await verify(value);
   } catch {
     return null;
   }
 }
 
-export async function GET(_request: Request, context: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await context.params;
     const table = ensureTableName(process.env.AIRTABLE_ENTRIES, 'AIRTABLE_ENTRIES');
-    const record = await atGet<AirtableEntry>(table, context.params.id);
+    const record = await atGet<AirtableEntry>(table, id);
 
     const parentField = record.fields?.parent;
-    const parentId = Array.isArray(parentField)
-      ? parentField[0]
-      : parentField;
+    const parentId = Array.isArray(parentField) ? parentField[0] : parentField;
 
     const entry: Entry = {
       id: record.id ?? '',
@@ -80,7 +74,7 @@ type EntryPayload = {
   parentId?: string;
 };
 
-export async function POST(request: Request, context: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await readAdminSession(request);
     if (!session) {
@@ -94,6 +88,7 @@ export async function POST(request: Request, context: { params: { id: string } }
       // ignore malformed payloads for PoC simplicity
     }
 
+    const { id } = await context.params;
     const { slug, title, content_md, sort, status, parentId } = payload;
     const table = ensureTableName(process.env.AIRTABLE_ENTRIES, 'AIRTABLE_ENTRIES');
     const fields: Record<string, unknown> = {};
@@ -109,8 +104,8 @@ export async function POST(request: Request, context: { params: { id: string } }
       fields.parent = parentId ? [parentId] : [];
     }
 
-    await atUpdate(table, context.params.id, fields);
-    return NextResponse.json({ ok: true, id: context.params.id });
+    await atUpdate(table, id, fields);
+    return NextResponse.json({ ok: true, id });
   } catch (error) {
     console.error('[entry] failed to save record', error);
     return NextResponse.json({ error: 'Unable to save entry' }, { status: 500 });
