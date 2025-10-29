@@ -61,7 +61,11 @@ export async function GET() {
     return NextResponse.json({ parents });
   } catch (error) {
     console.error('[parents] failed to load data', error);
-    const message = error instanceof Error ? error.message : 'Unable to load parents';
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : JSON.stringify(error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
