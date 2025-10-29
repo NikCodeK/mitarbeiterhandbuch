@@ -50,9 +50,7 @@ export async function GET() {
 
   try {
     const table = ensureTableName(process.env.AIRTABLE_PARENTS, 'AIRTABLE_PARENTS');
-    const { records } = await atList<{ records: AirtableRecord[] }>(table, {
-      sort: '[{"field":"sort","direction":"asc"}]',
-    });
+    const { records } = await atList<{ records: AirtableRecord[] }>(table);
 
     const parents: Parent[] = (records ?? [])
       .map((record) => ({
@@ -73,7 +71,13 @@ export async function GET() {
       : typeof error === 'string'
         ? error
         : JSON.stringify(error);
-    return NextResponse.json({ error: message, debug: { env: 'parents', hasApiKey: Boolean(process.env.AIRTABLE_API_KEY), hasBaseId: Boolean(process.env.AIRTABLE_BASE_ID), parentsTable: process.env.AIRTABLE_PARENTS } }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: message,
+        hint: 'Check Airtable table name and field permissions on the Vercel environment.',
+      },
+      { status: 500 },
+    );
   }
 }
 
