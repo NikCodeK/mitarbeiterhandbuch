@@ -462,22 +462,18 @@ function AdminDashboardContent() {
     const targetParent = parents[targetIndex]
     if (!currentParent || !targetParent) return
 
-    const currentSort = currentParent.sort ?? (currentIndex + 1) * 10
-    const targetSort = targetParent.sort ?? (targetIndex + 1) * 10
-
     const previousParents = parents.slice()
     const optimisticParents = parents.slice()
 
-    optimisticParents[currentIndex] = {
-      ...targetParent,
-      sort: currentSort,
-    }
-    optimisticParents[targetIndex] = {
-      ...currentParent,
-      sort: targetSort,
-    }
+    const [movedParent] = optimisticParents.splice(currentIndex, 1)
+    optimisticParents.splice(targetIndex, 0, movedParent)
 
-    setParents(optimisticParents)
+    const resequencedParents = optimisticParents.map((parent, index) => ({
+      ...parent,
+      sort: (index + 1) * 10,
+    }))
+
+    setParents(resequencedParents)
 
     try {
       const response = await fetch("/api/handbook/sort", {
@@ -485,10 +481,10 @@ function AdminDashboardContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           level: "parent",
-          fromId: currentParent.id,
-          fromSort: currentSort,
-          toId: targetParent.id,
-          toSort: targetSort,
+          order: resequencedParents.map((parent) => ({
+            id: parent.id,
+            sort: parent.sort ?? 0,
+          })),
         }),
         credentials: "include",
       })
@@ -497,7 +493,7 @@ function AdminDashboardContent() {
         throw new Error("sort failed")
       }
 
-      await refreshParents(targetParent.id)
+      await refreshParents(currentParent.id)
       setSelectedParentId(currentParent.id)
       setMessage("Sortierung aktualisiert.")
     } catch (error) {
@@ -646,22 +642,18 @@ function AdminDashboardContent() {
     const targetEntry = entries[targetIndex]
     if (!currentEntry || !targetEntry) return
 
-    const currentSort = currentEntry.sort ?? (currentIndex + 1) * 10
-    const targetSort = targetEntry.sort ?? (targetIndex + 1) * 10
-
     const previousEntries = entries.slice()
     const optimisticEntries = entries.slice()
 
-    optimisticEntries[currentIndex] = {
-      ...targetEntry,
-      sort: currentSort,
-    }
-    optimisticEntries[targetIndex] = {
-      ...currentEntry,
-      sort: targetSort,
-    }
+    const [movedEntry] = optimisticEntries.splice(currentIndex, 1)
+    optimisticEntries.splice(targetIndex, 0, movedEntry)
 
-    setEntries(optimisticEntries)
+    const resequencedEntries = optimisticEntries.map((entry, index) => ({
+      ...entry,
+      sort: (index + 1) * 10,
+    }))
+
+    setEntries(resequencedEntries)
 
     try {
       const response = await fetch("/api/handbook/sort", {
@@ -669,10 +661,10 @@ function AdminDashboardContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           level: "entry",
-          fromId: currentEntry.id,
-          fromSort: currentSort,
-          toId: targetEntry.id,
-          toSort: targetSort,
+          order: resequencedEntries.map((entry) => ({
+            id: entry.id,
+            sort: entry.sort ?? 0,
+          })),
         }),
         credentials: "include",
       })

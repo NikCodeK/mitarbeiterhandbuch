@@ -41,15 +41,32 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { fromId, fromSort, toId, toSort, level } = body ?? {};
-
-    if (!fromId || !toId || fromSort === undefined || toSort === undefined) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-    }
+    const { fromId, fromSort, toId, toSort, level, order } = body ?? {};
 
     const table = level === 'parent'
       ? requireTable(PARENT_TABLE, 'AIRTABLE_PARENTS')
       : requireTable(ENTRY_TABLE, 'AIRTABLE_ENTRIES');
+
+    if (Array.isArray(order) && order.length > 0) {
+      await Promise.all(
+        order
+          .filter((item: unknown): item is { id: string; sort: number } => {
+            return Boolean(
+              item &&
+                typeof (item as { id?: unknown }).id === 'string' &&
+                typeof (item as { sort?: unknown }).sort !== 'undefined',
+            );
+          })
+          .map((item) =>
+            atUpdate(table, item.id, { sort: Number(item.sort) }),
+          ),
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!fromId || !toId || fromSort === undefined || toSort === undefined) {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
 
     await Promise.all([
       atUpdate(table, fromId, { sort: toSort }),
