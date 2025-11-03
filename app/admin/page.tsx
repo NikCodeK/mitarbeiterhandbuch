@@ -94,6 +94,8 @@ function AdminDashboardContent() {
   const [isSavingEntry, setIsSavingEntry] = useState(false)
   const [isLoadingEntry, setIsLoadingEntry] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isDeletingParent, setIsDeletingParent] = useState(false)
+  const [isDeletingEntry, setIsDeletingEntry] = useState(false)
   const selectedEntryIdRef = useRef<string>("")
 
   const selectedParent = useMemo(
@@ -500,6 +502,20 @@ function AdminDashboardContent() {
     })
   }
 
+  async function deleteEntryById(entryId: string) {
+    const response = await fetch(`/api/handbook/entry/${entryId}`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(
+        (typeof payload?.error === "string" && payload.error) || `delete failed with ${response.status}`,
+      )
+    }
+    setConfigWarning(extractWarning(payload))
+  }
+
   async function handleEntrySave() {
     if (!entryForm.parentId) {
       setMessage("Bitte zuerst einen Abschnitt auswählen.")
@@ -561,6 +577,43 @@ function AdminDashboardContent() {
     }
   }
 
+  async function handleEntryDelete() {
+    if (!selectedEntryId) {
+      setMessage("Kein Eintrag ausgewählt.")
+      return
+    }
+    const currentEntry = entries.find((entry) => entry.id === selectedEntryId)
+    const entryTitle = currentEntry?.title || currentEntry?.slug || "Eintrag"
+    if (
+      !window.confirm(
+        `Soll der Eintrag "${entryTitle}" wirklich gelöscht werden? Dieser Schritt kann nicht rückgängig gemacht werden.`,
+      )
+    ) {
+      return
+    }
+
+    setIsDeletingEntry(true)
+    setMessage("")
+
+    try {
+      await deleteEntryById(selectedEntryId)
+      setEntries((prev) => prev.filter((entry) => entry.id !== selectedEntryId))
+      setSelectedEntryId("")
+      setEntryForm({
+        ...emptyEntryForm,
+        parentId: selectedParent?.id,
+        status: "Draft",
+      })
+      setMessage("Eintrag gelöscht.")
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to delete entry", error)
+      setMessage("Eintrag konnte nicht gelöscht werden.")
+    } finally {
+      setIsDeletingEntry(false)
+    }
+  }
+
   async function moveEntry(direction: -1 | 1) {
     const currentIndex = entries.findIndex((entry) => entry.id === selectedEntryId)
     if (currentIndex === -1) return
@@ -604,6 +657,69 @@ function AdminDashboardContent() {
     } catch (error) {
       console.error("Failed to move entry", error)
       setMessage("Eintrags-Reihenfolge konnte nicht aktualisiert werden.")
+    }
+  }
+
+  async function handleParentDelete() {
+    if (!selectedParentId) {
+      setMessage("Bitte zuerst einen Bereich auswählen.")
+      return
+    }
+
+    const currentParent = parents.find((parent) => parent.id === selectedParentId)
+    if (!currentParent) {
+      setMessage("Der ausgewählte Bereich konnte nicht gefunden werden.")
+      return
+    }
+
+    const entriesToDelete = [...entries]
+    const confirmationText =
+      entriesToDelete.length > 0
+        ? `Der Bereich "${currentParent.title}" enthält ${entriesToDelete.length} Eintrag${
+            entriesToDelete.length === 1 ? "" : "e"
+          }. Alle verknüpften Einträge werden dauerhaft gelöscht. Fortfahren?`
+        : `Soll der Bereich "${currentParent.title}" endgültig gelöscht werden?`
+
+    if (!window.confirm(confirmationText)) {
+      return
+    }
+
+    setIsDeletingParent(true)
+    setMessage("")
+
+    try {
+      for (const entry of entriesToDelete) {
+        await deleteEntryById(entry.id)
+        setEntries((prev) => prev.filter((existing) => existing.id !== entry.id))
+      }
+
+      const response = await fetch("/api/handbook/parents", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: currentParent.id }),
+        credentials: "include",
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(
+          (typeof payload?.error === "string" && payload.error) || `delete failed with ${response.status}`,
+        )
+      }
+      setConfigWarning(extractWarning(payload))
+
+      setMessage("Bereich gelöscht.")
+      setSelectedEntryId("")
+      setEntryForm({ ...emptyEntryForm })
+      setParentForm({ ...emptyParentForm })
+      setEntries([])
+      setSelectedParentId("")
+      await refreshParents()
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to delete parent", error)
+      setMessage("Bereich konnte nicht gelöscht werden.")
+    } finally {
+      setIsDeletingParent(false)
     }
   }
 
@@ -702,6 +818,14 @@ function AdminDashboardContent() {
             <div className="flex items-end gap-2">
               <Button type="button" variant="outline" onClick={resetParentForm}>
                 Neu beginnen
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleParentDelete}
+                disabled={!parentForm.id || isSavingParent || isDeletingParent}
+              >
+                {isDeletingParent ? "Lösche ..." : "Bereich löschen"}
               </Button>
               <Button type="button" onClick={handleParentSave} disabled={isSavingParent}>
                 {isSavingParent ? "Speichere ..." : "Bereich speichern"}
@@ -906,6 +1030,14 @@ function AdminDashboardContent() {
             </Button>
             <Button type="button" variant="outline" onClick={resetEntryFormForCreation} disabled={isSavingEntry || isLoadingEntry}>
               Neu beginnen
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleEntryDelete}
+              disabled={!selectedEntryId || isDeletingEntry || isSavingEntry || isLoadingEntry}
+            >
+              {isDeletingEntry ? "Lösche ..." : "Eintrag löschen"}
             </Button>
           </div>
         </CardContent>

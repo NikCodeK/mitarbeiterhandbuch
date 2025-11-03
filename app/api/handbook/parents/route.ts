@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { AirtableConfigError, AirtableRateLimitError, atCreate, atList, atUpdate } from '../../../../lib/airtable';
+import { AirtableConfigError, AirtableRateLimitError, atCreate, atDelete, atList, atUpdate } from '../../../../lib/airtable';
 import type { Parent } from '../../../../lib/types';
 import { verify } from '../../../../lib/auth';
 
@@ -163,5 +163,44 @@ export async function POST(request: Request) {
     }
     console.error('[parents] failed to save data', error);
     return NextResponse.json({ error: 'Unable to save parent' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await readAdminSession(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const payload = await request.json().catch(() => ({}));
+    const id = typeof payload?.id === 'string' ? payload.id : '';
+    if (!id) {
+      return NextResponse.json({ error: 'Missing parent id' }, { status: 400 });
+    }
+
+    const table = ensureTableName(process.env.AIRTABLE_PARENTS, 'AIRTABLE_PARENTS');
+    await atDelete(table, id);
+
+    return NextResponse.json({ ok: true, id });
+  } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      return NextResponse.json(
+        { error: error.message, requiresConfig: true },
+        { status: 503 },
+      );
+    }
+    if (error instanceof AirtableRateLimitError) {
+      return NextResponse.json(
+        {
+          error: 'Airtable-Rate-Limit erreicht. Bitte später erneut versuchen.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 429 },
+      );
+    }
+    console.error('[parents] failed to delete record', error);
+    return NextResponse.json({ error: 'Unable to delete parent' }, { status: 500 });
   }
 }

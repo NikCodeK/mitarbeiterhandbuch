@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { AirtableConfigError, AirtableRateLimitError, atGet, atUpdate } from '../../../../../lib/airtable';
+import { AirtableConfigError, AirtableRateLimitError, atDelete, atGet, atUpdate } from '../../../../../lib/airtable';
 import { verify } from '../../../../../lib/auth';
 import type { Entry } from '../../../../../lib/types';
 
@@ -144,5 +144,39 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
     console.error('[entry] failed to save record', error);
     return NextResponse.json({ error: 'Unable to save entry' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await readAdminSession(request);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await context.params;
+    const table = ensureTableName(process.env.AIRTABLE_ENTRIES, 'AIRTABLE_ENTRIES');
+
+    await atDelete(table, id);
+    return NextResponse.json({ ok: true, id });
+  } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      return NextResponse.json(
+        { error: error.message, requiresConfig: true },
+        { status: 503 },
+      );
+    }
+    if (error instanceof AirtableRateLimitError) {
+      return NextResponse.json(
+        {
+          error: 'Airtable-Rate-Limit erreicht. Bitte später erneut löschen.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 429 },
+      );
+    }
+    console.error('[entry] failed to delete record', error);
+    return NextResponse.json({ error: 'Unable to delete entry' }, { status: 500 });
   }
 }

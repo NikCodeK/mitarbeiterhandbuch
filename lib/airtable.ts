@@ -176,3 +176,11 @@ export async function atGet<T = unknown>(table: string, id: string): Promise<T> 
     cache: 'no-store',
   });
 }
+
+export async function atDelete<T = unknown>(table: string, id: string): Promise<T> {
+  const { baseUrl, headers } = resolveConfig();
+  return readJson<T>(`${baseUrl}/${tableName(table)}/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+}
