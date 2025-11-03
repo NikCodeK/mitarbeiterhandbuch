@@ -6,7 +6,7 @@ import "@uiw/react-markdown-preview/markdown.css"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useMemo, useState, Suspense } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react"
 
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
@@ -94,6 +94,7 @@ function AdminDashboardContent() {
   const [isSavingEntry, setIsSavingEntry] = useState(false)
   const [isLoadingEntry, setIsLoadingEntry] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const selectedEntryIdRef = useRef<string>("")
 
   const selectedParent = useMemo(
     () => parents.find((parent) => parent.id === selectedParentId) ?? null,
@@ -118,6 +119,10 @@ function AdminDashboardContent() {
       })),
     [entries],
   )
+
+  useEffect(() => {
+    selectedEntryIdRef.current = selectedEntryId
+  }, [selectedEntryId])
 
   useEffect(() => {
     if (!entries.length) {
@@ -192,7 +197,7 @@ function AdminDashboardContent() {
       ...prev,
       parentId: targetParent.id,
     }))
-  }, [parents, requestedParentId])
+  }, [parents, requestedParentId, selectedParentId])
 
   // Handle URL parameters
   useEffect(() => {
@@ -253,7 +258,7 @@ function AdminDashboardContent() {
         setMessage("Elternabschnitte konnten nicht geladen werden.")
       }
     },
-    [selectedParentId],
+    [requestedParentId, selectedParentId],
   )
 
   useEffect(() => {
@@ -261,45 +266,59 @@ function AdminDashboardContent() {
   }, [refreshParents])
 
   useEffect(() => {
+    const parentId = selectedParent?.id
     if (!selectedParentSlug) {
       setEntries([])
       setSelectedEntryId("")
       setEntryForm({
         ...emptyEntryForm,
-        parentId: selectedParent?.id,
+        parentId,
         status: "Draft",
       })
       return
     }
 
+    const controller = new AbortController()
+    const slug = selectedParentSlug
+
     void (async () => {
       try {
-        const response = await fetch(`/api/handbook/entries?parent=${encodeURIComponent(selectedParentSlug)}`, {
+        const response = await fetch(`/api/handbook/entries?parent=${encodeURIComponent(slug)}`, {
           cache: "no-store",
           credentials: "include",
+          signal: controller.signal,
         })
         if (!response.ok) {
           throw new Error(`entries request failed: ${response.status}`)
         }
         const json = await response.json()
+        if (controller.signal.aborted) {
+          return
+        }
         setConfigWarning(extractWarning(json))
         const fetchedEntries: Entry[] = json.entries ?? []
         setEntries(fetchedEntries)
 
-        if (!selectedEntryId || !fetchedEntries.some((entry) => entry.id === selectedEntryId)) {
+        const hasSelected = fetchedEntries.some((entry) => entry.id === selectedEntryIdRef.current)
+        if (!hasSelected) {
           setSelectedEntryId("")
           setEntryForm({
             ...emptyEntryForm,
-            parentId: selectedParent?.id,
+            parentId,
             status: "Draft",
           })
         }
       } catch (error) {
+        if ((error as Error | undefined)?.name === "AbortError") {
+          return
+        }
         console.error("Failed to load entries", error)
         setMessage("Einträge konnten nicht geladen werden.")
       }
     })()
-  }, [selectedParentSlug, selectedParent?.id, selectedEntryId])
+
+    return () => controller.abort()
+  }, [selectedParentSlug, selectedParent?.id])
 
   useEffect(() => {
     if (!selectedEntryId) {
@@ -311,22 +330,30 @@ function AdminDashboardContent() {
       return
     }
 
+    const controller = new AbortController()
+    const entryId = selectedEntryId
+    const parentId = selectedParent?.id
+
     void (async () => {
       setIsLoadingEntry(true)
       try {
-        const response = await fetch(`/api/handbook/entry/${selectedEntryId}`, {
+        const response = await fetch(`/api/handbook/entry/${entryId}`, {
           cache: "no-store",
           credentials: "include",
+          signal: controller.signal,
         })
         if (!response.ok) {
           throw new Error(`entry request failed: ${response.status}`)
         }
         const json = await response.json()
+        if (controller.signal.aborted || entryId !== selectedEntryIdRef.current) {
+          return
+        }
         setConfigWarning(extractWarning(json))
         const entry: Entry | undefined = json.entry
         setEntryForm({
           id: entry?.id,
-          parentId: entry?.parentId ?? selectedParent?.id,
+          parentId: entry?.parentId ?? parentId,
           slug: entry?.slug ?? "",
           title: entry?.title ?? "",
           content_md: entry?.content_md ?? "",
@@ -334,17 +361,27 @@ function AdminDashboardContent() {
           status: entry?.status ?? "",
         })
       } catch (error) {
+        if ((error as Error | undefined)?.name === "AbortError") {
+          return
+        }
         console.error("Failed to load entry", error)
         setMessage("Eintrag konnte nicht geladen werden.")
         setEntryForm({
           ...emptyEntryForm,
-          parentId: selectedParent?.id,
+          parentId,
           status: "Draft",
         })
       } finally {
-        setIsLoadingEntry(false)
+        if (!controller.signal.aborted) {
+          setIsLoadingEntry(false)
+        }
       }
     })()
+
+    return () => {
+      controller.abort()
+      setIsLoadingEntry(false)
+    }
   }, [selectedEntryId, selectedParent?.id])
 
   function resetParentForm() {
