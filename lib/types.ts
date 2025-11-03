@@ -1,29 +1,18 @@
-export type SectionSlug = string;
-
-export type SectionMeta = {
+export type Parent = {
+  id: string;
+  slug: string;
   title: string;
-  parent?: SectionSlug;
-  keywords?: string[];
-  description?: string;
+  sort?: number;
+  published?: boolean;
 };
 
-export type SectionGroup = {
-  slug: SectionSlug;
+export type Entry = {
+  id: string;
+  parentId: string;
+  parentSlug?: string;
+  slug: string;
   title: string;
-  description?: string;
-  icon?: string;
-  children: SectionSlug[];
-};
-
-export type SearchItem = {
-  slug: SectionSlug;
-  title: string;
-  parent?: SectionSlug;
-  keywords: string[];
-};
-
-export type NavLink = {
-  slug: SectionSlug;
-  label: string;
-  parent?: SectionSlug;
+  content_md?: string;
+  sort?: number;
+  status?: 'Draft' | 'Published';
 };

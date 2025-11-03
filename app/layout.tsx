@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter, Source_Sans_3 } from 'next/font/google';
 
-import { ThemeProvider } from '@/components/layout/ThemeProvider';
-import { cn } from '@/lib/utils';
+import { ThemeProvider } from '../components/layout/ThemeProvider';
+import { cn } from '../lib/utils';
 
 import './globals.css';
 

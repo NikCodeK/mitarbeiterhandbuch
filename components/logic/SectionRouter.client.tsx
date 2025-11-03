@@ -1,265 +1,183 @@
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { sectionGroups, sections } from '@/lib/sectionMap';
-import type { SectionSlug } from '@/lib/types';
-import { sectionComponents } from '@/components/sections';
+import GenericSection from '../sections/GenericSection';
+import type { Entry, Parent } from '../../lib/types';
 
-type SectionRouterContextValue = {
-  active: SectionSlug;
-  previous: SectionSlug | null;
-  stack: SectionSlug[];
-  goTo: (slug: SectionSlug, options?: { replace?: boolean }) => void;
-  goBack: () => void;
+type ParentResponse = { parents?: Parent[] };
+type EntriesResponse = { entries?: Entry[] };
+
+type SectionRouterProps = {
+  isAdmin?: boolean;
 };
 
-const SectionRouterContext = createContext<SectionRouterContextValue | null>(
-  null,
-);
-
-const validSlugs = new Set(Object.keys(sections));
-
-function isValidSlug(candidate: string | null | undefined): candidate is SectionSlug {
-  return Boolean(candidate && validSlugs.has(candidate));
-}
-
-function readSlugFromLocation(): SectionSlug {
-  if (typeof window === 'undefined') {
-    return 'home';
-  }
-  const hash = window.location.hash?.replace(/^#/, '') ?? '';
-  if (isValidSlug(hash)) {
-    return hash;
-  }
-  const params = new URLSearchParams(window.location.search);
-  const querySlug = params.get('s');
-  if (isValidSlug(querySlug)) {
-    return querySlug;
-  }
-  return 'home';
-}
-
-export function SectionRouterProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const stackRef = useRef<SectionSlug[]>(['home']);
-  const skipHashEventRef = useRef(false);
-  const [active, setActive] = useState<SectionSlug>('home');
-  const [previous, setPrevious] = useState<SectionSlug | null>(null);
-  const [stackSnapshot, setStackSnapshot] = useState<SectionSlug[]>([
-    'home',
-  ]);
-
-  const syncStack = useCallback((next: SectionSlug[]) => {
-    stackRef.current = next;
-    setStackSnapshot(next);
-    setPrevious(next.length > 1 ? next[next.length - 2] : null);
-  }, []);
+export default function SectionRouter({ isAdmin = false }: SectionRouterProps) {
+  const [parents, setParents] = useState<Parent[]>([]);
+  const [active, setActive] = useState<string>('start');
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const cacheRef = useRef<Record<string, Entry[]>>({});
+  const [healthError, setHealthError] = useState<string | null>(null);
 
   useEffect(() => {
-    const slug = readSlugFromLocation();
-    setActive(slug);
-    syncStack([slug]);
-
-    // Persist slug in hash so parent frames read it reliably
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.hash = slug;
-      window.history.replaceState(window.history.state, '', url.toString());
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const goTo = useCallback(
-    (target: SectionSlug, options?: { replace?: boolean }) => {
-      if (typeof window === 'undefined') {
-        return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch('/api/handbook/health', { cache: 'no-store' });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data?.error || `health request failed: ${response.status}`);
+        }
+        if (!cancelled) {
+          setHealthError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+          setHealthError(message);
+        }
       }
-      if (!isValidSlug(target)) {
-        return;
-      }
-      const currentStack = stackRef.current;
-      const last = currentStack[currentStack.length - 1];
-      if (last === target && !options?.replace) {
-        return;
-      }
+    })();
 
-      const nextStack = options?.replace
-        ? [...currentStack.slice(0, -1), target]
-        : [...currentStack, target];
-
-      syncStack(nextStack);
-      setActive(target);
-
-      const url = new URL(window.location.href);
-      url.hash = target;
-      skipHashEventRef.current = true;
-      if (options?.replace) {
-        window.history.replaceState(window.history.state, '', url.toString());
-      } else {
-        window.location.hash = target;
-      }
-
-      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-    },
-    [syncStack],
-  );
-
-  const goBack = useCallback(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const currentStack = stackRef.current;
-    if (currentStack.length <= 1) {
-      goTo('home', { replace: true });
-      return;
-    }
-    const nextStack = currentStack.slice(0, -1);
-    const nextSlug = nextStack[nextStack.length - 1] ?? 'home';
-    syncStack(nextStack);
-    setActive(nextSlug);
-
-    const url = new URL(window.location.href);
-    url.hash = nextSlug;
-    skipHashEventRef.current = true;
-    window.history.replaceState(window.history.state, '', url.toString());
-    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-  }, [goTo, syncStack]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const onHashChange = () => {
-      if (skipHashEventRef.current) {
-        skipHashEventRef.current = false;
-        return;
-      }
-      const slug = readSlugFromLocation();
-      const currentStack = stackRef.current;
-      const last = currentStack[currentStack.length - 1];
-      const secondLast =
-        currentStack.length > 1
-          ? currentStack[currentStack.length - 2]
-          : null;
-
-      if (slug === last) {
-        setActive(slug);
-        return;
-      }
-      if (slug === secondLast) {
-        const nextStack = currentStack.slice(0, -1);
-        syncStack(nextStack);
-        setActive(slug);
-        return;
-      }
-      if (isValidSlug(slug)) {
-        const nextStack = [...currentStack, slug];
-        syncStack(nextStack);
-        setActive(slug);
-      }
-    };
-
-    window.addEventListener('hashchange', onHashChange);
     return () => {
-      window.removeEventListener('hashchange', onHashChange);
+      cancelled = true;
     };
-  }, [syncStack]);
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch('/api/handbook/parents', {
+          cache: 'no-store',
+          ...(isAdmin ? { credentials: 'include' as const } : {}),
+        });
+        if (!response.ok) {
+          throw new Error(`parents request failed: ${response.status}`);
+        }
+        const data: ParentResponse = await response.json().catch(() => ({}));
+        const validParents = (data.parents ?? []).filter((parent) => parent.slug && parent.title);
+        setParents(validParents);
+
+        const initialSlug = (() => {
+          if (typeof window !== 'undefined' && window.location.hash) {
+            return window.location.hash.replace('#', '');
+          }
+          return validParents[0]?.slug ?? 'start';
+        })();
+
+        setActive(initialSlug || 'start');
+      } catch (error) {
+        console.error('Failed to load parents', error);
+        // Set empty parents array on error
+        setParents([]);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!parents.length) {
+      return;
+    }
+    const hasActive = parents.some((parent) => parent.slug === active);
+    if (!hasActive) {
+      setActive(parents[0]?.slug ?? 'start');
+    }
+  }, [parents, active]);
+
+  useEffect(() => {
+    void (async () => {
+      if (!active) {
+        return;
+      }
+
+      if (cacheRef.current[active]) {
+        setEntries(cacheRef.current[active]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams({ parent: active });
+        const response = await fetch(`/api/handbook/entries?${params.toString()}`, {
+          cache: 'no-store',
+          ...(isAdmin ? { credentials: 'include' as const } : {}),
+        });
+        if (!response.ok) {
+          throw new Error(`entries request failed: ${response.status}`);
+        }
+        const data: EntriesResponse = await response.json().catch(() => ({}));
+        const parentEntries = (data.entries ?? []).filter((entry) => entry.title && entry.title.trim() !== '');
+        cacheRef.current[active] = parentEntries;
+        setEntries(parentEntries);
+
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.hash = active;
+          window.history.replaceState({ slug: active }, '', url);
+          window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+        }
+      } catch (error) {
+        console.error(`Failed to load entries for ${active}`, error);
+        setEntries([]);
+      }
+    })();
+  }, [active, isAdmin]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
-    const root = document.querySelector('main') || document.body;
-    if (!root) {
+
+    const main = document.querySelector('main') || document.body;
+    if (!main) {
       return;
     }
-    const observer = new ResizeObserver(() => {
-      const height =
-        root instanceof HTMLElement ? root.scrollHeight : document.body.scrollHeight;
-      window.parent?.postMessage(
-        { type: 'handbook:height', height },
-        '*',
-      );
+
+    const resizeObserver = new ResizeObserver(() => {
+      const height = main instanceof HTMLElement ? main.scrollHeight : document.body.scrollHeight;
+      window.parent?.postMessage({ type: 'handbook:height', height }, '*');
     });
-    observer.observe(root);
-    return () => observer.disconnect();
+
+    resizeObserver.observe(main);
+    return () => resizeObserver.disconnect();
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
+
     const onThemeMessage = (event: MessageEvent) => {
-      if (
-        event.data &&
-        typeof event.data === 'object' &&
-        event.data.type === 'handbook:set-theme'
-      ) {
+      if (event.data && typeof event.data === 'object' && event.data.type === 'handbook:set-theme') {
         const mode = event.data.mode === 'dark' ? 'dark' : 'light';
         document.documentElement.classList.toggle('dark', mode === 'dark');
       }
     };
+
     window.addEventListener('message', onThemeMessage);
     return () => window.removeEventListener('message', onThemeMessage);
   }, []);
 
-  const value = useMemo<SectionRouterContextValue>(
-    () => ({
-      active,
-      previous,
-      stack: stackSnapshot,
-      goTo,
-      goBack,
-    }),
-    [active, goBack, goTo, previous, stackSnapshot],
+  const sortedParents = useMemo(
+    () => [...parents].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)),
+    [parents],
   );
 
   return (
-    <SectionRouterContext.Provider value={value}>
-      {children}
-    </SectionRouterContext.Provider>
+    <>
+      {healthError && (
+        <div className="mx-auto w-full max-w-5xl px-4 pt-6">
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Airtable-Verbindung fehlgeschlagen: {healthError}
+          </div>
+        </div>
+      )}
+      <GenericSection
+        parents={sortedParents}
+        active={active}
+        onNavigate={setActive}
+        entries={entries}
+        isAdmin={isAdmin}
+      />
+    </>
   );
 }
-
-export function useSectionRouter() {
-  const ctx = useContext(SectionRouterContext);
-  if (!ctx) {
-    throw new Error('useSectionRouter must be used within SectionRouterProvider');
-  }
-  return ctx;
-}
-
-export function SectionRenderer({ isAdmin = false }: { isAdmin?: boolean } = {}) {
-  const { active, goTo, goBack } = useSectionRouter();
-  const Component =
-    sectionComponents[active] ?? sectionComponents['home'];
-  const meta = sections[active] ?? sections['home'];
-
-  if (!Component) {
-    return null;
-  }
-
-  return (
-    <Component
-      slug={active}
-      meta={meta}
-      goTo={goTo}
-      goBack={goBack}
-      isAdmin={isAdmin}
-    />
-  );
-}
-
-export const topLevelSections = sectionGroups.map((group) => group.slug);

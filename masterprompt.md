@@ -1,0 +1,1563 @@
+
+
+Master-Prompt: “HTML → Next.js App (iframe-ready) – nur UI”
+Rolle: Du bist Senior-Frontend-Engineer.Ziel: Wandle den folgenden statischen HTML-Code in eine Next.js 15 App (App Router, TypeScript) um. Fokus: UI/UX, keine echten Datenquellen. Das Ergebnis soll als eigenständige, hostbare Seite laufen, die ich per <iframe> in eine bestehende Website einbinden kann (saubere Höhe/Resize, Dark-Mode optional).
+Anforderungen (must-haves)
+* Tech-Stack: Next.js (App Router, TS), Tailwind CSS, shadcn/ui, lucide-react.
+* Struktur: Saubere Komponenten-Hierarchie (atomic-ish), Props, Mock-Daten, klare Ordnerstruktur.
+* Styling: Tailwind Utilities; shadcn/ui für Controls; keine Inline-Styles außer minimalen Ausnahmen.
+* A11y: Semantik (header/nav/main/section/footer), ARIA, Fokusreihenfolge, Kontrast.
+* Responsiveness: Mobile-First; sinnvolle Breakpoints; Sidebar/Content-Layout responsiv.
+* Routing/State: Client-seitige Section-Navigation (ersetzt das alte showSection()), Active-States für Sidebar-Links, Back-Button-Logik, Suchfeld mit Filterung innerhalb der Sections.
+* Iframe-Einbettung:
+    * Auto-Resize der Höhe via ResizeObserver und postMessage an parent (Event-Namespace definieren, z. B. handbook:height).
+    * Optional: Listener für Dark-Mode/Theme vom Parent (handbook:set-theme).
+    * Keine externen Fonts/CDNs, wenn vermeidbar (lokal oder via next/font).
+* Build/Deploy: Projekt-Setup-Befehle, Vercel-Hinweise, vercel.json (falls sinnvoll), Security-Header (CSP-Hinweis), SEO-Meta (basic).
+Was du liefern sollst (Schritte & Artefakte)
+1. Analyse & Component-Map
+    * Extrahiere aus dem HTML alle Sections/IDs/Navigationseinträge.
+    * Erzeuge eine Component-Map (Sidebar, SectionMenu, SubCategoryButton, einzelne Section-Komponenten, SearchBox, BackButton, SectionRouter etc.) und die Parent-Relationen (Menü ↔ Unterseite).
+2. Projekt-Setup (Befehle in Reihenfolge)
+    * pnpm dlx create-next-app@latest (TS, App Router)
+    * Tailwind einrichten (postcss, config, globals.css)
+    * shadcn/ui installieren & initialisieren; importiere benötigte Komponenten (Button, Card, Accordion, Input, Badge, Switch, ScrollArea etc.).
+    * lucide-react installieren.
+    * next/font (lokale/Google-Font ohne FOUC).
+3. Ordner- & Datei-Struktur (zeigen)app/
+4.   layout.tsx
+5.   page.tsx
+6.   globals.css
+7. components/
+8.   layout/{AppLayout.tsx, Sidebar.tsx, SidebarLink.tsx, BackButton.tsx}
+9.   home/{HomeSection.tsx, SearchBox.tsx, HomeTocGrid.tsx}
+10.   menus/{SectionMenu.tsx, SubCategoryButton.tsx}
+11.   sections/{...alle Section-Komponenten nach ID...}
+12.   ui/{Collapsible.tsx, Card.tsx, Table.tsx}
+13.   logic/{SectionRouter.client.tsx}
+14. lib/{sectionMap.ts, types.ts, data.ts}
+15. 
+16. Code-Implementierung (vollständige TSX-Snippets je Datei)
+    * app/layout.tsx: <html lang="de">, Fonts, Theme-Provider (class-based), Skip-Link.
+    * app/page.tsx: rendert AppLayout, Sidebar, BackButton, SectionRouter, HomeSection.
+    * components/logic/SectionRouter.client.tsx: State-Management (z. B. URL-Hash/Query oder Zustand), Active-Section wechseln, Parent-Menü markieren, Back-Button-Historie.
+    * components/layout/Sidebar*.tsx: Links erhalten data-target/Slug; Active-Styles.
+    * components/home/*: SearchBox filtert Section-Titel/IDs und ruft SectionRouter an.
+    * components/menus/*: Landing-Grids für Unterkategorien.
+    * components/sections/*: Inhalt aus HTML in modulare Komponenten übersetzen, Überschriften-Hierarchie korrigieren, Tabellen → shadcn/ui Table, Accordions → shadcn/ui Accordion.
+    * lib/sectionMap.ts: Mapping slug → React-Komponente, plus Parent-Beziehungen.
+    * lib/types.ts: Typen für NavLink, SectionMeta, SearchItem etc.
+    * lib/data.ts: Mock-Daten (Arrays) für Buttons/Links.
+17. Iframe-Integration (bereitstellen)
+    * Auto-Resize: useEffect mit ResizeObserver auf <main> → postMessage({ type: 'handbook:height', height }).
+    * Parent-Snippet: Kurzer Code für die einbettende Seite (Event-Listener, Höhe setzen, optional Theme-Forwarding per postMessage).
+    * CSP/Headers: Hinweis auf X-Frame-Options / Content-Security-Policy: frame-ancestors für erlaubte Einbettungs-Domänen.
+18. A11y/Quality-Checklist
+    * Landmark-Rollen, Labelling, Tab-Reihenfolge, Kontrast, Focus-Styles, Lighthouse-Hinweise.
+19. Deploy-Hinweise
+    * vercel Deploy, Build Command, Output. Optional vercel.json mit headers (CSP/frame-ancestors) und cache für statische Assets.
+Wichtige Umsetzungsregeln
+* Keine Backend-Logik, keine echten API-Calls; Suche/Navigation nur client-seitig.
+* IDs/Anker aus dem HTML konservieren (Slugify falls nötig), damit Deep-Links funktionieren (/#slug oder ?s=slug).
+* Dark-Mode: class-based; Toggle in Header oder Sidebar (shadcn/ui Switch).
+* Keine Inline-<script>; gesamte Interaktion in React.
+
+HTML Quelle:
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mitarbeiterhandbuch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #ec7700;
+            --primary-darker: #d96d00;
+            --primary-lighter: #f5a04e;
+            --bg-light: #fff5ed;
+            --text-dark: #2d3748; /* equivalent to gray-800 */
+        }
+        body {
+            /* Changed font to Avenir */
+            font-family: 'Avenir', sans-serif;
+            color: var(--text-dark);
+            background-color: var(--bg-light);
+        }
+        .main-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 280px;
+            background-color: #ffffff;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+            padding: 1.5rem 1rem;
+            flex-shrink: 0;
+            overflow-y: auto;
+        }
+        .content-area {
+            flex-grow: 1;
+            padding: 2rem;
+            max-width: calc(100% - 280px);
+            position: relative; /* For back button positioning */
+        }
+        .content-section {
+            background-color: #ffffff;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .content-section h2, .content-section h3 {
+            color: var(--primary-darker);
+            margin-bottom: 0.75rem;
+            margin-top: 1.5rem;
+        }
+        .content-section p, .content-section ul, .content-section ol, .content-section table {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+        .content-section ul li, .content-section ol li {
+            margin-left: 1.25rem;
+            list-style-type: disc;
+            margin-bottom: 0.5rem;
+        }
+        .content-section ol li {
+            list-style-type: decimal;
+        }
+        .sidebar-link {
+            display: block;
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 0.25rem;
+            border-radius: 0.375rem;
+            color: var(--primary-color);
+            transition: all 0.2s ease-in-out;
+            font-size: 1.1rem;
+            text-decoration: none;
+        }
+        .sidebar-link:hover {
+            background-color: var(--bg-light);
+            color: var(--primary-darker);
+        }
+        .sidebar-link.active {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+        .sub-category-button {
+            display: block;
+            width: 100%;
+            padding: 0.8rem 1rem;
+            margin-bottom: 0.75rem;
+            background-color: #f0f0f0; /* Default light gray for non-orange buttons */
+            color: var(--text-dark);
+            border-radius: 0.5rem;
+            text-align: left;
+            font-size: 1.1rem;
+            font-weight: 400; /* Default non-bold */
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+        }
+        .sub-category-button:hover {
+            background-color: #e0e0e0; /* Darker gray on hover */
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+        }
+        .sub-category-button.orange {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 500; /* Bold for orange buttons */
+        }
+        .sub-category-button.orange:hover {
+            background-color: var(--primary-darker);
+        }
+        .sub-category-button.nested {
+            background-color: #f5a04e; /* Lighter orange for nested buttons */
+            color: white;
+            font-weight: 400; /* Non-bold for nested buttons */
+        }
+        .sub-category-button.nested:hover {
+            background-color: #e28a3a; /* Slightly darker lighter orange */
+        }
+
+
+        .scroll-to-top {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 9999px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.3s ease-in-out;
+            z-index: 1000;
+        }
+        .scroll-to-top:hover {
+            background-color: var(--primary-darker);
+            transform: translateY(-2px);
+        }
+
+
+        /* Hide all sections by default, show active ones via JS */
+        .content-area > section {
+            display: none;
+        }
+        .content-area > section.active {
+            display: block;
+        }
+        
+        .search-results-item {
+            display: block;
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            text-decoration: none;
+            color: #333;
+        }
+        .search-results-item:hover {
+            background-color: #e0e0e0;
+        }
+
+
+        .collapsible-header {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: var(--bg-light);
+            padding: 0.75rem 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+            transition: background-color 0.2s ease-in-out;
+            font-weight: 600;
+            color: var(--primary-darker);
+            border: 1px solid var(--primary-lighter);
+        }
+        .collapsible-header:hover {
+            background-color: #ffe8d6; /* A slightly darker light orange */
+        }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        .collapsible-content.expanded {
+            max-height: 2000px; /* Increased max-height for expanded content */
+            transition: max-height 0.5s ease-in;
+        }
+        .arrow-icon {
+            transition: transform 0.3s ease-in-out;
+        }
+        .arrow-icon.rotated {
+            transform: rotate(90deg);
+        }
+
+
+        .back-button {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background-color: transparent;
+            color: #6b7280;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            box-shadow: none;
+            transition: all 0.3s ease-in-out;
+            z-index: 999;
+            display: flex;
+            align-items: center;
+        }
+        .back-button:hover {
+            background-color: #e2e8f0;
+            color: #4b5563;
+            transform: translateY(-1px);
+        }
+        /* Edit button and status indicator styles removed */
+
+
+        @media (max-width: 768px) {
+            .main-layout {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                max-height: 300px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .content-area {
+                max-width: 100%;
+                padding: 1rem;
+            }
+            .back-button {
+                top: 0.5rem;
+                left: 0.5rem;
+                padding: 0.4rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="main-layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="space-y-1">
+                <a href="#home" class="sidebar-link active" data-target="home">Startseite 🏠</a>
+                <a href="#unsere-mission" class="sidebar-link" data-target="unsere-mission">Unsere Mission 📜</a>
+                <a href="#kerngeschäft" class="sidebar-link" data-target="kerngeschäft">Kerngeschäft 💼</a>
+                <a href="#policies-menu" class="sidebar-link" data-target="policies-menu">Policies 📝</a>
+                <a href="#mitarbeiter-gespräche-menu" class="sidebar-link" data-target="mitarbeiter-gespräche-menu">Mitarbeiter Gespräche 🗣️</a>
+                <a href="#ki-leitfaden" class="sidebar-link" data-target="ki-leitfaden">KI-Leitfaden 🤖</a>
+                <a href="#benefits-menu" class="sidebar-link" data-target="benefits-menu">Benefits ✨</a>
+                <a href="#zusammenarbeit-menu" class="sidebar-link" data-target="zusammenarbeit-menu">Zusammenarbeit 🧑‍🤝‍🧑</a>
+                <a href="#onboarding-menu" class="sidebar-link" data-target="onboarding-menu">Onboarding 🚀</a>
+            </div>
+        </nav>
+
+
+        <!-- Main Content Area -->
+        <div class="content-area">
+            <!-- Back Button -->
+            <button id="backButton" class="back-button hidden">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            </button>
+            
+            <!-- Homepage Section -->
+            <section id="home" class="content-section active">
+                <header class="text-center mb-10">
+                    <h1 class="text-5xl font-bold text-[var(--primary-color)] mb-4">Mitarbeiterhandbuch</h1>
+                    <p class="text-xl text-gray-700 mt-6 leading-relaxed">
+                        Willkommen bei Thierhoff-Consulting! Dieses Handbuch ist dein Wegweiser durch den Arbeitsalltag. Es bündelt alle wichtigen Informationen, Richtlinien und Abläufe, um dir die Einarbeitung zu erleichtern und dir als zentrale Anlaufstelle zu dienen. Egal ob du nach unseren Kommunikationsregeln suchst, Details zu Überstunden wissen möchtest oder verstehen willst, wie wir mit Airtable arbeiten – hier findest du die Antworten. Sieh es als unser gemeinsames Nachschlagewerk, das uns hilft, effizient und transparent zusammenzuarbeiten.
+                    </p>
+                    <hr class="my-10 border-t-2 border-[var(--primary-lighter)]">
+                </header>
+
+
+                <div class="mb-8">
+                    <h3 class="text-2xl font-semibold text-[var(--primary-darker)] mb-4">Suche im Handbuch 🔍</h3>
+                    <input type="text" id="searchInput" placeholder="Gib ein Stichwort ein, z.B. 'Urlaub' oder 'Office'" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)]">
+                    <div id="searchResults" class="mt-4 space-y-2"></div>
+                </div>
+
+
+                <h2 class="text-3xl font-semibold text-[var(--primary-darker)] mb-6 text-center">Vollständiges Inhaltsverzeichnis 📖</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-lg">
+                    <button class="sub-category-button orange" data-target="unsere-mission">Unsere Mission 📜</button>
+                    <button class="sub-category-button orange" data-target="kerngeschäft">Kerngeschäft 💼</button>
+                    <button class="sub-category-button orange" data-target="policies-menu">Policies 📝</button>
+                    <button class="sub-category-button orange" data-target="mitarbeiter-gespräche-menu">Mitarbeiter Gespräche 🗣️</button>
+                    <button class="sub-category-button orange" data-target="ki-leitfaden">KI-Leitfaden 🤖</button>
+                    <button class="sub-category-button orange" data-target="benefits-menu">Benefits ✨</button>
+                    <button class="sub-category-button orange" data-target="zusammenarbeit-menu">Zusammenarbeit 🧑‍🤝‍🧑</button>
+                    <button class="sub-category-button orange" data-target="onboarding-menu">Onboarding 🚀</button>
+
+
+                    <!-- Sub-items as nested buttons -->
+                    <div class="col-span-full mt-4">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Weitere Themen:</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <button class="sub-category-button nested" data-target="airtable">Airtable 📊</button>
+                            <button class="sub-category-button nested" data-target="weiteres">Weiteres ➕</button>
+                            <button class="sub-category-button nested" data-target="tc-kultur-und-werte">TC-Kultur und Werte ❤️</button>
+                            <button class="sub-category-button nested" data-target="notfallkontakte">Notfallkontakte 🚨</button>
+                            <button class="sub-category-button nested" data-target="office">Office 🏢</button>
+                            <button class="sub-category-button nested" data-target="arbeitszeiterfassung">Arbeitszeiterfassung ⏰</button>
+                            <button class="sub-category-button nested" data-target="krankheit">Krankheit 🤒</button>
+                            <button class="sub-category-button nested" data-target="überstunden">Überstunden ⏳</button>
+                            <button class="sub-category-button nested" data-target="urlaubstage">Urlaubstage 🏖️</button>
+                            <button class="sub-category-button nested" data-target="reisekosten">Reisekosten 💸</button>
+                            <button class="sub-category-button nested" data-target="peer-feedback-section">Peer-Feedback im Team 👋</button>
+                            <button class="sub-category-button nested" data-target="feedback-gespräch">Feedback Gespräch ✅</button>
+                            <button class="sub-category-button nested" data-target="mitarbeiter-gespräche-detail">Mitarbeiter Gespräch 🤝</button>
+                            <button class="sub-category-button nested" data-target="deutschlandticket">Deutschlandticket 🚌</button>
+                            <button class="sub-category-button nested" data-target="home-office">Home-Office 🏠</button>
+                            <button class="sub-category-button nested" data-target="flexible-arbeitszeiten">Flexible Arbeitszeiten 🤸</button>
+                            <button class="sub-category-button nested" data-target="offsites">Offsites 🗺️</button>
+                            <button class="sub-category-button nested" data-target="workation">Workation 🌴</button>
+                            <button class="sub-category-button nested" data-target="all-hands-days">All-Hands-Days 🗓️</button>
+                            <button class="sub-category-button nested" data-target="team-lunch">Team-Lunch 🍔</button>
+                            <button class="sub-category-button nested" data-target="boni">Boni 💰</button>
+                            <button class="sub-category-button nested" data-target="google-kalender-section">Google-Kalender 📅</button>
+                            <button class="sub-category-button nested" data-target="interne-kommunikation-section">Interne Kommunikation 💬</button>
+                            <button class="sub-category-button nested" data-target="externe-kommunikation-section">Externe Kommunikation 📞</button>
+                            <button class="sub-category-button nested" data-target="dein-onboarding-prozess">Dein Onboarding-Prozess 👋</button>
+                            <button class="sub-category-button nested" data-target="zugänge-und-konten">Zugänge und Konten 🔑</button>
+                            <button class="sub-category-button nested" data-target="software-und-tools">Software und Tools 🛠️</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Regular Content Sections (main categories without sub-menus) -->
+            <section id="unsere-mission" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Unsere Mission 📜</h2>
+                <div class="content-text" data-key="unsere-mission-text">
+                    <p><strong>Wir sind der Funding-Partner für Unternehmen: Das Expertenteam, das mit Leichtigkeit, Freude und Respekt an schönen Orten inspirierend zusammenarbeitet, um wirkungsvolle Innovationen zu ermöglichen.</strong></p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-9 mb-3 collapsible-header">
+                        Die Stories zu unseren Schlüsselbegriffen
+                        <svg class="w-5 h-5 arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </h3>
+                    <div class="collapsible-content">
+                        <ul class="list-disc pl-5 space-y-2 py-2">
+                            <li><strong>1. Wir – das Team</strong><br>Wir beginnen mit „Wir“, weil alles bei uns in der Gemeinschaft wurzelt. Jedes Teammitglied bringt sein Können, seine Expertise, seine Erfahrungen und Persönlichkeit ein. Wir vertrauen uns und dürfen viel von einander erwarten. „Wir“ ist kein loses Wort, sondern die feste Zusage, dass niemand allein in der Verantwortung ist. Das WIR motiviert und inspiriert uns und lässt uns regelmäßig stolz zurückblicken.</li>
+                            <li><strong>2. DER Funding-Partner (unsere Kompetenz)</strong><br>Wir nennen uns DER Funding-Partner, weil Unternehmen bei uns nicht nur einen Förderantrag einreichen, sondern auf Augenhöhe einen kompetenten Berater, Wegbegleiter und Lotsen finden. Wir sind Experten in der Beratung von Forschungs- und Entwicklungsprojekten und der Guide im Dschungel von Förderprogrammen. Wir kennen die Vor- und Nachteile, die Do’s und Dont’s. Wir kennen das Kleingedruckte, sind Übersetzer und sprechen die Sprache von Gutachtern und Forschungs- und Entwicklungsteams. Unsere Expertise schafft Vertrauen und Leichtigkeit.</li>
+                            <li><strong>3. Unternehmen im Fokus</strong><br>Wir sind für Unternehmen da – von Start-ups mit zukunftsweisenden Ideen bis zu etablierten Mittelständlern mit reicher Historie. Unser B2B-Ansatz bedeutet, dass wir nicht nur Forschungs- und Entwicklungsambitionen, sondern auch Geschäftsmodelle und Finanzierungsbedarfe verstehen. So entwickeln wir praxistaugliche und nachhaltige Lösungen, die echten Mehrwert schaffen, wo Innovationen und Wertschöpfung entstehen: direkt in den Unternehmen.</li>
+                            <li><strong>4. Leichtigkeit (für alle)</strong><br>Leichtigkeit ist nicht nur ein Versprechen an den Kunden, sondern ein Bestandteil unserer DNA. Wir arbeiten und handeln stets lösungsorientiert. Wir optimieren Prozesse, sind offen und ehrlich, sprechen verständlich, feiern Erfolge und lassen Egos vor der Tür. Diese Leichtigkeit trägt uns durch hektische Tage und lässt unsere Kunden aufatmen, wenn sie merken: „Mit Clever Funding fühlt sich Förderung leicht an.“</li>
+                            <li><strong>5. Freude</strong><br>Humor und Freude sind immer in der Mitte unseres Teams. Gemeinsames Lachen macht komplexe Aufgaben leichter und schweißt uns zusammen. Spaß ist der Treibstoff, der Kreativität zündet und selbst den größten Fördermittel-Dschungel bunt macht.</li>
+                            <li><strong>6. Respekt</strong><br>Respekt ist unser Betriebssystem. Er zeigt sich in ehrlichem Feedback, in offener Kommunikation und in der Wertschätzung der Zeit, der Kompetenz und der Achtung des Anderen. Bei uns wird jede Stimme gehört. Ein respektvoller Umgang mit uns, unseren Partnern und Kunden bedeutet auch, zu reflektieren, bevor wir handeln. Wir stehen zu unserem Wort: Wenn wir etwas versprechen, dann halten wir es ein.</li>
+                            <li><strong>7. Schöne Orte</strong><br>Schöne Orte sind mehr als ein schickes Büro. Sie sind unser zweites Zuhause vor Ort und remote – im Kölner Loft, im Home-Office oder auf Off-Sites in den Bergen und am Meer. Wir glauben, dass inspirierende Umgebungen inspirierende Arbeit hervorbringen. Deshalb investieren wir in Räume, die Energie geben.</li>
+                            <li><strong>8. Wirkungsvolle Innovationen</strong><br>Unser Antrieb ist Sinn. Wir möchten Forschungs-, Entwicklungs- und Innovationsprojekte und Unternehmen unterstützen, die echten Impact haben – ob in Medizin, Klima-Tech, Industrie oder Software. Wir schaffen dafür gemeinsam die notwendigen finanziellen Rahmenbedingungen, damit Entwicklungsteams ihre Ideen verwirklichen können. Kurz: Wir ermöglichen Finanzierung, damit Innovation nicht nur geplant, sondern auch realisiert wird.</li>
+                            <li><strong>9. Zusammenarbeiten</strong><br>Am Ende kommt das „Zusammenarbeiten“ – der Schlussakkord, der zum Auftakt „Wir“ zurückführt. Unsere Zusammenarbeit ist geprägt von einem flexiblem Rollenverständnis, offenen Türen und Kalender und der Gewissheit, dass niemand alleine läuft. Wir ziehen gemeinsam an einem Strang, weil wir wissen: Nur so erreichen wir unser Ziel – der Funding-Partner zu sein, der Innovationen erfolgreich möglich macht.</li>
+                        </ul>
+                    </div>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3 collapsible-header">
+                        Unsere Prinzipien
+                        <svg class="w-5 h-5 arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </h3>
+                    <div class="collapsible-content">
+                        <p class="py-2">Unsere Mission stützt sich auf die folgenden zentralen Prinzipien, die uns bei unserer täglichen Arbeit leiten:</p>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li><strong>Wir handeln im Sinne des Unternehmens:</strong> Jede deiner Entscheidungen und Handlungen sollte darauf abzielen, das Unternehmen voranzubringen. Wenn du ein Problem erkennst, pack es proaktiv an und versuche, es selbstständig zu lösen.</li>
+                            <li><strong>Unsere Feedback-Kultur:</strong> Wir legen großen Wert auf offenes und ehrliches Feedback. Gib deinen Kolleg:innen konstruktive Rückmeldungen und nimm Feedback von anderen an, um persönlich und als Team zu wachsen.</li>
+                            <li><strong>Gesund Arbeiten:</strong> Wir legen Wert auf ein Umfeld, in dem wir uns wohlfühlen. Dazu gehört ein schönes Büro, die Zusammenarbeit mit freundlichen und netten Kolleg:innen, Spaß im Arbeitsalltag und auch im Privatleben. All das trägt zu einer gesunden Work-Life-Balance bei, die uns langfristig motiviert und leistungsfähig hält.</li>
+                            <li><strong>Gesunde Beziehungen:</strong> Vertrauen und Wertschätzung sind die Basis für unseren Erfolg. Das gilt sowohl für die Zusammenarbeit im Team als auch für den Umgang mit unseren Kunden.</li>
+                            <li><strong>Gesund Wachsen:</strong> Unser Ziel ist ein nachhaltiges Wachstum. Das bedeutet, wir wollen stetig besser werden und uns weiterentwickeln. Dabei steht nicht die Geschwindigkeit im Vordergrund, sondern das Wohlbefinden des Teams. Wichtig ist, dass wir weiterhin glücklich sind und Spaß an dem haben, was wir tun.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+
+            <section id="kerngeschäft" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Kerngeschäft 💼</h2>
+                <div class="content-text" data-key="kerngeschaeft-text">
+                    <p>Unser Kerngeschäft dreht sich um die <strong>Forschungszulage (FZL)</strong>. Dabei handelt es sich um eine staatliche Förderung, die Unternehmen bei ihren Forschungs- und Entwicklungsprojekten finanziell unterstützt. Sie ist technologieoffen, branchenunabhängig und richtet sich an alle steuerpflichtigen Unternehmen in Deutschland, unabhängig von ihrer Größe. Die FZL ermöglicht es, einen Teil der Personalkosten, die bei internen Forschungs- und Entwicklungsprojekten anfallen, sowie Lohnkosten von extern beauftragten Forschungen, in Form einer Steuergutschrift zurückzuerhalten.</p>
+                    <p>Für einen schnellen Überblick, was die Forschungszulage ist und wie sie funktioniert, sieh dir dieses Video an:</p>
+                    <div class="flex justify-center my-6">
+                        <a href="https://youtu.be/0cZJGC454NQ?t=268" target="_blank" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out flex items-center">
+                            <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                            Video zur Forschungszulage ansehen
+                        </a>
+                    </div>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Der Prozess der Beantragung</h3>
+                    <p>Die Beantragung der Forschungszulage bei der Bescheinigungsstelle Forschungszulage (BSFZ) ist ein mehrstufiger Prozess, den wir für unsere Kunden übernehmen:</p>
+                    <ol class="list-decimal pl-5 space-y-2">
+                        <li><strong>Vorbereitung:</strong> Wir starten mit einer detaillierten Analyse der Projekte des Kunden, um zu bewerten, welche davon für die Förderung infrage kommen. Hier prüfen wir, ob die Projekte die Kriterien der Forschungszulage erfüllen, z. B. ob sie systematisch und neuartig sind und einem wissenschaftlichen Ziel dienen.</li>
+                        <li><strong>Antragstellung:</strong> Wir erstellen die notwendigen Antragsdokumente. Das sind die fachliche Beschreibung der Projekte und die dazugehörigen Kalkulationen. Die Unterlagen reichen wir dann digital bei der BSFZ ein.</li>
+                        <li><strong>Auszahlung:</strong> Nach erfolgreicher Prüfung durch die BSFZ erhält der Kunde eine Bescheinigung, die ihm die Auszahlung der Forschungszulage über das Finanzamt ermöglicht.</li>
+                    </ol>
+                    <p>Wir betreuen den Kunden während des gesamten Prozesses, um eine reibungslose und erfolgreiche Beantragung zu gewährleisten und somit ihren Aufwand auf ein Minimum zu reduzieren.</p>
+                </div>
+            </section>
+
+
+            <!-- Policies Menu Landing Page -->
+            <section id="policies-menu" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-6">Policies 📝</h2>
+                <p class="text-lg text-gray-700 mb-8">Wähle einen Unterpunkt, um mehr über unsere Richtlinien und Abläufe zu erfahren:</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <button class="sub-category-button orange" data-target="office">Office 🏢</button>
+                    <button class="sub-category-button orange" data-target="arbeitszeiterfassung">Arbeitszeiterfassung ⏰</button>
+                    <button class="sub-category-button orange" data-target="krankheit">Krankheit 🤒</button>
+                    <button class="sub-category-button orange" data-target="überstunden">Überstunden ⏳</button>
+                    <button class="sub-category-button orange" data-target="urlaubstage">Urlaubstage 🏖️</button>
+                    <button class="sub-category-button orange" data-target="reisekosten">Reisekosten 💸</button>
+                    <button class="sub-category-button nested" data-target="airtable">Airtable 📊</button>
+                    <button class="sub-category-button nested" data-target="weiteres">Weiteres ➕</button>
+                </div>
+            </section>
+
+
+            <!-- Policies Sub-sections -->
+            <section id="office" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Office 🏢</h2>
+                <div class="content-text" data-key="office-rules-text">
+                    <p>Büroregeln und Leitlinien für eine angenehme Arbeitsumgebung:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Arbeitsplätze und Clean Desk Policy:</strong> Es gibt keine fest zugewiesenen Sitzplätze, um Flexibilität zu gewährleisten. Wir bitten jedoch alle Mitarbeitenden, die seltener im Büro sind, die bevorzugten Plätze für Kolleg:innen freizuhalten, die häufiger vor Ort arbeiten. Dies fördert eine faire Nutzung der Ressourcen. Wir legen Wert auf eine konsequente "Clean Desk Policy". Das bedeutet, dass alle Tische nach der Benutzung vollständig aufgeräumt und sauber hinterlassen werden müssen. Persönliche Gegenstände sollten am Ende des Arbeitstages mitgenommen oder in den dafür vorgesehenen Körben verstaut werden, um ein ordentliches und hygienisches Arbeitsumfeld für alle zu gewährleisten.</li>
+                        <li><strong>Nutzung der Meetingräume und Telefonboxen:</strong> Die Meetingräume können nicht im Voraus reserviert werden. Wir bitten darum, bei Einzelkundengesprächen oder Telefonaten nach Möglichkeit die dafür vorgesehenen Telefonboxen zu nutzen. Für größere Gesprächsrunden und Team-Meetings sollen die Meetingräume bedarfsgerecht genutzt und nach Beendigung des Termins umgehend für andere Kolleg:innen freigegeben werden. Auch hier ist es unerlässlich, die Räume sauber und ordentlich zu hinterlassen.</li>
+                        <li><strong>Küchenbereich und Sauberkeit:</strong> Ein sauberer Küchenbereich ist eine gemeinsame Verantwortung. Bitte räumt die Spülmaschine aus, sobald diese fertig ist, und stellt sie an, wenn sie voll ist. Geschirr sollte entweder direkt in die Spülmaschine gestellt oder umgehend von Hand gespült werden. Die Kaffeemaschine ist ein Herzstück unseres Büros. Wir bitten die Person, die die Kaffeemaschine zuletzt am Freitag benutzt, diese gründlich zu reinigen, um eine hygienische Nutzung für die gesamte nächste Woche sicherzustellen.</li>
+                        <li><strong>Haustiere im Büro:</strong> Hunde sind in unserem Büro erlaubt und es wird darum gebeten Streichelpausen einzuhalten. Solltest Du Berührungsängste oder Allergien gegenüber Hunden haben, bitten wir Dich, dies direkt und offen zu kommunizieren. So können sich die Hundebesitzer:innen besser darauf einstellen und Rücksicht nehmen, um ein harmonisches Miteinander für alle zu gewährleisten.</li>
+                        <li><strong>Allgemeine Sauberkeit und Hygiene:</strong> Eine externe Reinigungsfirma kommt einmal pro Woche. Sollte jedoch zwischendurch vermehrt Schmutz anfallen, bitten wir alle Mitarbeitenden, diesen umgehend zu beseitigen und für Sauberkeit zu sorgen. Ein sauberes und gepflegtes Büro trägt maßgeblich zum Wohlbefinden und zur Produktivität bei. In den Toiletten müssen die Handtücher eigenständig nachgelegt werden, sofern man diese aufgebraucht hat. Die Toiletten selbst sollten von allen Nutzenden sauber gehalten werden, sodass jede:r diese in einem guten und hygienischen Zustand vorfindet. Ihre Mithilfe ist entscheidend, um ein angenehmes Umfeld für alle zu erhalten.</li>
+                    </ul>
+                </div>
+            </section>
+
+
+            <section id="arbeitszeiterfassung" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Arbeitszeiterfassung ⏰</h2>
+                <div class="content-text" data-key="arbeitszeiterfassung-text">
+                    <p>Für eine präzise und gesetzeskonforme Arbeitszeiterfassung ist es unerlässlich, kundenspezifische Anforderungen zu berücksichtigen. Ein zentraler Aspekt hierbei ist die korrekte Erfassung von Pausenzeiten.</p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Pausenzeiten: Gesetzliche Vorgaben und deren Umsetzung</h3>
+                    <p>Gemäß den gesetzlichen Bestimmungen muss die Arbeitszeit durch definierte Pausen unterbrochen werden, um die Gesundheit und das Wohlbefinden der Mitarbeiter zu gewährleisten. Konkret bedeutet dies:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Nach 6 Stunden Arbeitszeit:</strong> Es muss eine Pause von mindestens 30 Minuten gewährt werden.</li>
+                        <li><strong>Nach 9 Stunden Arbeitszeit:</strong> Die Gesamtpausenzeit muss sich auf mindestens 45 Minuten erhöhen. Dies kann entweder durch eine einzelne 45-minütige Pause oder durch eine Kombination von Pausen erfolgen (z.B. 30 Minuten und weitere 15 Minuten).</li>
+                    </ul>
+                    <p>Diese Pausenzeiten müssen exakt erfasst und dokumentiert werden, um sowohl den gesetzlichen Anforderungen zu genügen als auch eine transparente Abrechnung der Arbeitsstunden zu ermöglichen.</p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Dokumentation der Tätigkeiten: Transparenz und Nachvollziehbarkeit</h3>
+                    <p>Ein weiterer wichtiger Punkt ist die detaillierte Dokumentation der ausgeführten Tätigkeiten. Es ist von entscheidender Bedeutung, dass jeder Mitarbeiter präzise festhält, welche Aufgaben in welchem Zeitraum erledigt wurden. Dies dient mehreren Zwecken:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Nachvollziehbarkeit:</strong> Es wird transparent, welche Leistungen erbracht wurden, was besonders bei der Abrechnung von Projekten / Einstufung von Kunden relevant ist.</li>
+                        <li><strong>Effizienzsteigerung:</strong> Eine genaue Dokumentation kann helfen, Arbeitsabläufe zu analysieren und Optimierungspotenziale zu identifizieren.</li>
+                        <li><strong>Qualitätssicherung:</strong> Bei späteren Rückfragen oder Problemen kann schnell nachvollzogen werden, welche Schritte unternommen wurden.</li>
+                    </ul>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Standardisierung der Prozesse: Einheitlichkeit für alle Mitarbeiter</h3>
+                    <p>Um eine konsistente und faire Arbeitszeiterfassung zu gewährleisten, ist eine Standardisierung der internen Prozesse unerlässlich. Dies bedeutet, dass die Regeln und Richtlinien für die Zeiterfassung und Tätigkeitsdokumentation für jeden Mitarbeiter identisch sein müssen. Eine einheitliche Vorgehensweise bietet folgende Vorteile:</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Gleichbehandlung:</strong> Alle Mitarbeiter werden nach denselben Kriterien beurteilt und abgerechnet.</li>
+                        <li><strong>Fehlerreduzierung:</strong> Klare und einheitliche Prozesse minimieren Missverständnisse und Fehler bei der Zeiterfassung.</li>
+                        <li><strong>Einfache Einarbeitung:</strong> Neue Mitarbeiter können sich leichter in ein etabliertes und standardisiertes System einfinden.</li>
+                        <li><strong>Compliance:</strong> Eine Standardisierung erleichtert die Einhaltung gesetzlicher Vorschriften und interner Richtlinien.</li>
+                    </ul>
+                    <p>Konkret bedeutet dies, dass die <strong>Stunden</strong> in TellenHR explizit auf den dafür vorgesehenen <strong>Kundencode gebucht</strong> werden. Sofern <strong>Arbeiten</strong> in einem <strong>spezifischen Projekt</strong> anfallen, sollten diese auf die <strong>Projektcodes</strong> des Kunden gebucht werden. Zu jeder Buchung soll in kurzen <strong>Stichpunkten ein Hinweis vermerkt</strong> werden, um nachvollziehen zu können, welche Buchung mit welchen Tätigkeiten korrespondiert.</p>
+                </div>
+            </section>
+
+
+<section id="krankheit" class="content-section">
+    <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Krankheit 🤒</h2>
+    <div class="content-text" data-key="krankheit-text">
+        <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Was tun, wenn du krank bist?</h3>
+        <p>Deine Gesundheit hat bei uns oberste Priorität. Solltest du einmal krankheitsbedingt ausfallen, sind die folgenden Schritte zu beachten. So stellen wir sicher, dass alle wichtigen Informationen fließen und der Betriebsablauf so reibungslos wie möglich weiterläuft.</p>
+        
+        <div class="space-y-6 mt-6">
+            <div>
+                <h4 class="text-lg font-bold">1. Dein Team informieren und Aufgaben übergeben</h4>
+                <p class="mt-2">Bitte informiere so früh wie möglich, idealerweise noch vor deinem regulären Arbeitsbeginn, deine direkten Kolleg:innen und deinen Lead über deine Abwesenheit. Eine kurze Nachricht per Chat ist ausreichend. So können sich deine Kolleg:innen organisieren und wichtige Aufgaben übernehmen.</p>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                    <li>Bitte gib ihnen dabei auch relevante inhaltliche Hinweise zu deinen dringendsten Projekten und Kunden.</li>
+                    <li>Übergebe deine Termine entweder oder sage diese selbst ab.</li>
+                    <li>Dein Fokus liegt auf deiner Genesung, du sollst während einer Krankheit nicht arbeiten.</li>
+                </ul>
+            </div>
+
+
+            <div>
+                <h4 class="text-lg font-bold">2. Personalbuchhaltung benachrichtigen und AU Bescheinigung einreichen</h4>
+                <p class="mt-2">Neben deinem Team ist die Personalbuchhaltung eine wichtige Anlaufstelle. Bitte schicke am ersten Tag deiner Arbeitsunfähigkeit eine E-Mail an <a href="mailto:buchhaltung@thierhoff-consulting.de" class="text-[var(--primary-color)] hover:underline">buchhaltung@thierhoff-consulting.de</a>.</p>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                    <li>Gib darin den ersten Krankheitstag und die voraussichtliche Dauer deiner Abwesenheit an.</li>
+                    <li>Bei einer Verlängerung der Krankschreibung informiere die Buchhaltung bitte umgehend erneut.</li>
+                    <li>Ab dem 1. Fehltag (bzw. gem. Arbeitsvertrag) ist eine Arbeitsunfähigkeitsbescheinigung (AU) erforderlich, reiche diese notfalls nach.</li>
+                    <li><strong>Elektronische AU (eAU):</strong> Falls du eine elektronische AU erhältst, teile dies bitte der Personalbuchhaltung mit. Sie kann die eAU direkt von deiner Krankenkasse abrufen.</li>
+                    <li><strong>Papierform:</strong> Wenn du die AU in Papierform bekommst, scanne sie bitte ein und füge sie der Mail bei. Das Original bewahre bitte gut auf.</li>
+                </ul>
+            </div>
+
+
+            <div>
+                <h4 class="text-lg font-bold">3. Abwesenheit in tellentHR erfassen</h4>
+                <p class="mt-2">Um eine korrekte Stundenabrechnung sicherzustellen, ist es unerlässlich, dass du deine Abwesenheit auch in unserem HR-System tellentHR einträgst.</p>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                    <li>Trage deine Abwesenheit bitte so schnell wie möglich als „Krank“ ein.</li>
+                    <li>Wird deine Abwesenheit nicht explizit in tellentHR erfasst, werden deine Krankheitsstunden nicht erfasst und dein Soll nicht erreicht.</li>
+                </ul>
+            </div>
+        </div>
+
+
+        <p class="mt-6">Mit diesen Schritten stellst du sicher, dass deine Abwesenheit korrekt kommuniziert, dokumentiert und verarbeitet wird. Wir wünschen dir gute Besserung und schnelle Genesung!</p>
+    </div>
+</section>
+
+
+            <section id="überstunden" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Überstunden ⏳</h2>
+                <div class="content-text" data-key="ueberstunden-text">
+                    <p>Wir legen Wert auf eine gesunde Work-Life-Balance und möchten, dass Überstunden die Ausnahme bleiben. Wir bitten dich, Überstunden so schnell wie möglich abzubauen. Das sorgt nicht nur für einen besseren Ausgleich, sondern hilft auch bei der Planung im Team.</p>
+                    <p>Es dürfen maximal Überstunden im Umfang einer Arbeitswoche gesammelt werden (Vollzeit: max. 40 Stunden, Teilzeit: reguläre Wochenstunden). Diese Überstunden können eigenverantwortlich abgebaut werden, solange das operative Geschäft nicht beeinträchtigt wird. Bitte beachte dabei folgende Regelungen.</p>
+                    <ol class="list-decimal pl-5 space-y-2">
+                        <li><strong>Regelung für Überstunden unter der Wochenstundenanzahl</strong><br>Können eigenverantwortlich abgebaut werden, sofern das operative Geschäft nicht beeinträchtigt wird. Sofern der Überstundenabbau einen Arbeitstag oder mehr beinhaltet, muss dieser Ausgleich mit dem Team-Lead abgestimmt werden und ein Überstundenausgleich Antrag über TellentHR gestellt werden.</li>
+                    </ol>
+                    <p>Sollten mehr als die genannte Anzahl an Überstunden anfallen, muss dies <strong>vorab</strong> mit deinem Teamlead abgestimmt werden.</p>
+                    <ol start="2" class="list-decimal pl-5 space-y-2">
+                        <li><strong>Regelung für Überstunden über der Wochenstundenanzahl</strong><br>Muss vorab mit dem Teamlead abgestimmt werden und nur nach Abstimmung dürfen mehr Stunden gesammelt werden. Wenn Du Überstundenfrei beantragen möchtest, muss dies ausschließlich über unser HR-Tool TellenHR beantragt und von deinem Team-Lead freigegeben werden.</li>
+                    </ol>
+                    <p>Bitte kommuniziere dies frühzeitig, damit wir gemeinsam die beste Lösung finden können.</p>
+                </div>
+            </section>
+
+
+            <section id="urlaubstage" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Urlaubstage 🏖️</h2>
+                <div class="content-text" data-key="urlaubstage-text">
+                    <p>Die aktuelle Fassung unserer Urlaubstage findest Du im Drive unter diesem <a href="https://docs.google.com/document/d/19M28FraNJMq-32t1wUqtR5ydAn2mOEWZI0-5ujJjPkk/edit?tab=t.0" class="text-[var(--primary-color)] hover:underline">Link</a>.</p>
+                    <p>Jahresurlaub ist geplant für das gesamte Jahr und soll in diesem Jahr genutzt werden.</p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Geschenkte Feiertage:</h3>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>Weiberfastnacht (½ Tag)</li>
+                        <li>Rosenmontag (1 Tag)</li>
+                        <li>Heiligabend (1 Tag)</li>
+                        <li>Silvester (½ Tag)</li>
+                    </ul>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Sonderurlaubstage:</h3>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>Eigene Hochzeit (1 Tag)</li>
+                        <li>Verlust eines nahen Angehörigen (1. Grad) (1 Tag)</li>
+                        <li>Umzug (½ Tag)</li>
+                    </ul>
+                    <p>Geschenkte Feiertage werden in TellentHR bei der Beantragung von Urlaub automatisch berücksichtigt.</p>
+                    <p>Sonderurlaubstage können über den neuen Abwesenheitsmodus “Sonderurlaub” beantragt werden.</p>
+                    <p>Weiterer Bedarf für freie Zeit wird über Überstunden und Urlaub berücksichtigt und nach Möglichkeit sehr flexibel und auch kurzfristig ermöglicht. Zusätzlicher Bedarf an freier Zeit, der über den regulären Urlaub hinausgeht, kann durch Überstunden ausgeglichen werden, die dann in Freizeit umgewandelt werden können. Wir sind bestrebt, diese zusätzlichen Freizeitanträge so flexibel wie möglich zu handhaben, und werden auch kurzfristige Anfragen nach Möglichkeit berücksichtigen.</p>
+                </div>
+            </section>
+
+
+            <section id="reisekosten" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Reisekosten 💸</h2>
+                <div class="content-text" data-key="reisekosten-text">
+                    <p>Du suchst Informationen zu Reisekosten? Alle wichtigen Regelungen und das Formular für die Beantragung findest du in einem PDF, das wir im Google Drive abgelegt haben. Klick einfach auf diesen Button, um direkt zum Ordner zu gelangen:</p>
+                    <div class="flex justify-center my-6">
+                        <a href="https://drive.google.com/drive/folders/1NDWo9mOPD-TvyU4r-AfqbEkH0PI0ktMR" target="_blank" class="bg-[var(--primary-color)] hover:bg-[var(--primary-darker)] text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out flex items-center">
+                            <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg>
+                            Zum Reisekosten-Ordner im Drive
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Mitarbeiter Gespräche Menu Landing Page -->
+            <section id="mitarbeiter-gespräche-menu" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-6">Mitarbeiter Gespräche 🗣️</h2>
+                <p class="text-lg text-gray-700 mb-8">Wähle einen Unterpunkt, um mehr über unsere Gesprächsformate zu erfahren:</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <button class="sub-category-button orange" data-target="peer-feedback-section">Peer-Feedback 👋</button>
+                    <button class="sub-category-button orange" data-target="feedback-gespräch">Feedback Gespräch ✅</button>
+                    <button class="sub-category-button orange" data-target="mitarbeiter-gespräche-detail">Mitarbeiter Gespräch 🤝</button>
+                </div>
+            </section>
+
+
+            <!-- Mitarbeiter Gespräche Intermediate Section for Peer-Feedback -->
+            <section id="peer-feedback-section" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Peer-Feedback 👋</h2>
+                <p class="text-lg text-gray-700 mb-8">Wähle einen Unterpunkt, um mehr über Peer-Feedback zu erfahren:</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <button class="sub-category-button nested" data-target="peer-feedback-content">Peer-Feedback im Team</button>
+                    <button class="sub-category-button nested" data-target="leitfaden-feedback-content">Leitfaden für dein Feedback-Gespräch</button>
+                </div>
+            </section>
+
+
+            <!-- Mitarbeiter Gespräche Sub-sections -->
+            <section id="peer-feedback-content" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Peer-Feedback im Team 👋</h2>
+                <div class="content-text" data-key="peer-feedback-text">
+                    <p>Wir führen 1-3 Mal pro Jahr Feedback-Gespräche im Team. Das Ziel ist es, voneinander zu lernen und uns gemeinsam weiterzuentwickeln. Die Informationen im Drive findest Du hier: <a href="https://drive.google.com/drive/folders/11TKbMWTdVrXtUdTNhp0sfHn9WpzAU7V7" class="text-[var(--primary-color)] hover:underline">7 1:1 Feedback</a>.</p>
+                    <h4 class="text-xl font-medium text-[var(--primary-lighter)] mt-4 mb-2">So funktioniert es:</h4>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>Wähle drei Kolleg*innen aus, mit denen du dich austauschen möchtest.</li>
+                        <li>Vereinbare einen 20-minütigen Termin. Ob persönlich, bei einem Spaziergang oder digital – das liegt ganz bei euch.</li>
+                    </ul>
+                    <h4 class="text-xl font-medium text-[var(--primary-lighter)] mt-4 mb-2">Wichtige Grundsätze:</h4>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Vertraulich:</strong> Was besprochen wird, bleibt zwischen euch beiden.</li>
+                        <li><strong>Ehrlich und konstruktiv:</strong> Feedback sollte immer wohlwollend, positiv und ermutigend sein.</li>
+                        <li><strong>Ich-Botschaften:</strong> Nutze Sätze wie "Ich nehme wahr, dass...", um deine Rückmeldung zu formulieren.</li>
+                        <li><strong>Konkrete Beispiele:</strong> Gib Situationen an, die deine Rückmeldung verdeutlichen.</li>
+                    </ul>
+                </div>
+            </section>
+
+
+            <section id="leitfaden-feedback-content" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Leitfaden für dein Feedback-Gespräch 📝</h2>
+                <div class="content-text" data-key="leitfaden-feedback-text">
+                    <p>Dieser Leitfaden hilft dir, das Gespräch vorzubereiten und zu strukturieren. Die Idee ist, dass du dir ein bis zweimal pro Jahr Feedback von 3-4 Kolleg*innen einholst.</p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Vorbereitung:</h3>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>Wähle Personen, die dich in deiner Arbeit erlebt haben. Das können Teammitglieder oder Kolleg*innen aus anderen Bereichen sein. Es geht um ehrliche Rückmeldung, nicht nur um die von deinen engsten Vertrauten.</li>
+                        <li>Die Ergebnisse sind nur für dich. Mache dir während des Gesprächs Notizen.</li>
+                    </ul>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Ablauf des 45-minütigen Gesprächs:</h3>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Check-in:</strong> Beginnt kurz damit, wie es euch geht.</li>
+                        <li><strong>Gesprächsbeginn:</strong> Erkläre, warum du die jeweilige Person für dieses Feedback-Gespräch ausgewählt hast.</li>
+                        <li><strong>Feedback-Struktur: Keeps - Ideas - Highlights</strong>
+                            <ul class="list-circle pl-5 mt-2">
+                                <li><strong>Keeps:</strong> Was funktioniert richtig gut? Was solltest du unbedingt beibehalten? Nenne mindestens 3 konkrete Punkte.</li>
+                                <li><strong>Ideas:</strong> Was könntest du besser oder anders machen? Wo siehst du Entwicklungspotenzial? Nenne auch hier mindestens 3 Aspekte.</li>
+                                <li><strong>Highlights:</strong> Was macht dich in deiner Arbeit besonders?</li>
+                            </ul>
+                        </li>
+                        <li><strong>Check-out:</strong> Schließt das Gespräch ab, indem ihr kurz darüber sprecht, wie ihr es erlebt habt.</li>
+                    </ul>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Tipps für dein Feedback-Gespräch:</h3>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Als Feedback-Empfänger:</strong> Höre gut zu und frage nach, ohne dich zu rechtfertigen.</li>
+                        <li><strong>Als Feedback-Geber:</strong> Bereite dich auf das Gespräch vor. Sei präzise, respektvoll und habe den Mut, ehrlich zu sein. Vertrauen ist die Basis.</li>
+                    </ul>
+                </div>
+            </section>
+
+
+            <section id="feedback-gespräch" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Feedback Gespräch ✅</h2>
+                <div class="content-text" data-key="feedback-gespraech-text">
+                    <p>Einmal jährlich, für gewöhnlich in den Sommermonaten, findet ein persönliches Feedback-Gespräch mit deinem <strong>Teamlead</strong> statt. Dieses Gespräch dient dazu, deine Entwicklung, deine Wünsche und deine Ziele zu besprechen. Es ist eine Gelegenheit für einen offenen Austausch über deine Arbeit und wie dein Team-Lead dich bestmöglich unterstützen kann.</p>
+                </div>
+            </section>
+
+
+            <section id="mitarbeiter-gespräche-detail" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Mitarbeiter Gespräch 🤝</h2>
+                <div class="content-text" data-key="mitarbeiter-gespraech-detail-text">
+                    <p>Einmal jährlich, für gewöhnlich im Januar, findet ein umfassenderes Mitarbeitergespräch mit deinem <strong>Teamlead und Head of</strong> statt. Dieses Gespräch ist eine Gelegenheit, gemeinsam deine <strong>Erfolge und deinen Beitrag</strong> zum Unternehmen zu reflektieren. Wir sprechen über deine Karriereziele und wie das Unternehmen dich auf diesem Weg bestmöglich unterstützen kann. Es dient dazu, deine Rolle im größeren Kontext zu evaluieren und deine Zukunft bei uns zu gestalten.</p>
+                </div>
+            </section>
+
+
+            <!-- Regular Content Sections -->
+            <section id="airtable" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Airtable 📊</h2>
+                <div class="content-text" data-key="airtable-text">
+                    <p>Airtable ist das zentrale Tool, mit dem wir bei TC arbeiten. Es ist die Basis für alle unsere Kernprozesse – von <strong>Sales, Projektmanagement, Research & Development</strong>, <strong>Financial Consultants</strong> bis hin zu den <strong>Abrufen</strong> und den gesamten <strong>Finance-Prozessen</strong>. Airtable hilft uns, effizient und transparent zusammenzuarbeiten.</p>
+                    <p>Jeder <strong>Teamlead</strong> ist für seinen spezifischen Bereich in Airtable verantwortlich. Dazu gehört auch die Koordination von Automatisierungen mit anderen Abteilungen, um einen reibungslosen Workflow zu garantieren.</p>
+                    <p>Wenn du <strong>Feedback, Verbesserungsvorschläge oder Wünsche</strong> hast, wende dich bitte immer zuerst an deinen <strong>Teamlead</strong>. So stellen wir sicher, dass alle Anliegen koordiniert und effektiv umgesetzt werden können.</p>
+                </div>
+            </section>
+
+
+            <section id="weiteres" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Weiteres ➕</h2>
+                <div class="content-text" data-key="weiteres-text">
+                    <p>Alle weiteren Prozesse werden intern kommuniziert und in <a href="https://drive.google.com/drive/folders/16n8Qf5LvEyD7icDKdN3VQ2IqHcF4BedW" class="text-[var(--primary-color)] hover:underline">diesem Ordner</a> festgehalten.</p>
+                </div>
+            </section>
+
+
+            <section id="ki-leitfaden" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">KI-Leitfaden 🤖</h2>
+                <div class="content-text" data-key="ki-leitfaden-text">
+                    <p>Willkommen im Zeitalter der künstlichen Intelligenz (KI)! Dieser Leitfaden soll dir zeigen, wie du KI in deinem Arbeitsalltag nutzen kannst, um effizienter und kreativer zu sein. Keine Sorge, du brauchst kein Technikexperte zu sein. Wir zeigen dir einfache Anwendungen und geben dir Tipps für gute Prompts, damit du das Beste aus KI herausholen kannst.</p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Was ist KI und warum ist sie nützlich für dich?</h3>
+                    <p>KI ist wie ein intelligenter Assistent, der dir bei vielen Aufgaben helfen kann. Sie kann Texte zusammenfassen, Ideen generieren, Daten analysieren und vieles mehr. Stell dir vor, du hättest einen Mitarbeiter, der 24/7 verfügbar ist und dir bei Routineaufgaben hilft, damit du dich auf die wirklich wichtigen Dinge konzentrieren kannst.</p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Anwendungsbeispiele im Wissensarbeiter-Alltag</h3>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>E-Mail-Management:</strong> KI kann dir helfen, E-Mails zu priorisieren, Entwürfe zu erstellen oder sogar Antworten zu formulieren.</li>
+                        <li><strong>Recherche und Informationsbeschaffung:</strong> Nutze KI, um schnell relevante Informationen zu finden und zusammenzufassen.</li>
+                        <li><strong>Texterstellung und -bearbeitung:</strong> KI kann dir helfen, Texte zu schreiben, zu überarbeiten oder zu übersetzen.</li>
+                        <li><strong>Ideenfindung und Brainstorming:</strong> KI kann dir neue Perspektiven und kreative Ideen liefern.</li>
+                        <li><strong>Datenanalyse und Berichterstellung:</strong> KI kann große Datenmengen analysieren und Berichte erstellen.</li>
+                    </ul>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">How to Prompt</h3>
+                    <p>Ein guter Prompt ist der Schlüssel zur erfolgreichen Nutzung von KI. Hier ist eine bewährte Struktur:</p>
+                    <pre class="bg-gray-100 p-4 rounded-md text-sm whitespace-pre-wrap"><code># Role and Objective Definiere deine Rolle und das Ziel des Prompts.
+# Instructions Gib klare Anweisungen, was die KI tun soll.
+## Sub-categories for more detailed instructions Unterteile komplexe Anweisungen in kleinere Schritte.
+# Reasoning Steps Beschreibe die Denkweise, die die KI anwenden soll.
+# Output Format Gib an, welches Format das Ergebnis haben soll (z.B. Liste, Text, Tabelle).
+# Examples Füge Beispiele hinzu, um die Anweisungen zu verdeutlichen.
+## Example 1 Kontext und spezifische Anweisungen für das Beispiel.
+# Final instructions and prompt to think step by step Abschließende Anweisungen und Aufforderung, Schritt für Schritt vorzugehen.
+                    </code></pre>
+                    <p>oder nutze Lyra, um deine Prompts besser zu machen. So gehts: Einfach den Text im Folgenden kopieren, in die KI einfügen und Nachricht senden und dann auf die Fragen antworten. So einfach:</p>
+                    <pre class="bg-gray-100 p-4 rounded-md text-sm whitespace-pre-wrap"><code>“You are Lyra, a master-level AI prompt optimization specialist. Your mission: transform any user input into precision-crafted prompts that unlock AI's full potential across all platforms.
+## THE 4-D METHODOLOGY
+
+
+### 1. DECONSTRUCT
+- Extract core intent, key entities, and context
+- Identify output requirements and constraints
+- Map what's provided vs. what's missing
+### 2. DIAGNOSE
+- Audit for clarity gaps and ambiguity
+- Check specificity and completeness
+- Assess structure and complexity needs
+### 3. DEVELOP
+- Select optimal techniques based on request type:
+  - *Creative* → Multi-perspective + tone emphasis
+  - *Technical* → Constraint-based + precision focus
+  - *Educational* → Few-shot examples + clear structure
+  - *Complex* → Chain-of-thought + systematic frameworks
+- Assign appropriate AI role/expertise
+- Enhance context and implement logical structure
+
+
+### 4. DELIVER
+- Construct optimized prompt
+- Format based on complexity
+- Provide implementation guidance
+
+
+## OPTIMIZATION TECHNIQUES
+
+
+*Foundation:* Role assignment, context layering, output specs, task decomposition
+*Advanced:* Chain-of-thought, few-shot learning, multi-perspective analysis, constraint optimization
+*Platform Notes:*
+- *ChatGPT/GPT-4:* Structured sections, conversation starters
+- *Claude:* Longer context, reasoning frameworks
+- *Gemini:* Creative tasks, comparative analysis
+- *Others:* Apply universal best practices
+
+
+## OPERATING MODES
+
+
+*DETAIL MODE:* - Gather context with smart defaults
+- Ask 2-3 targeted clarifying questions
+- Provide comprehensive optimization
+
+
+*BASIC MODE:*
+- Quick fix primary issues
+- Apply core techniques only
+- Deliver ready-to-use prompt
+
+
+## RESPONSE FORMATS
+
+
+*Simple Requests:*
+
+
+**Your Optimized Prompt:**
+[Improved prompt]
+
+
+**What Changed:** [Key improvements]
+
+
+*Complex Requests:*
+**Your Optimized Prompt:**
+[Improved prompt]
+**Key Improvements:**
+• [Primary changes and benefits]
+
+
+**Techniques Applied:** [Brief mention]
+
+
+**Pro Tip:** [Usage guidance]
+
+
+## WELCOME MESSAGE (REQUIRED)
+When activated, display EXACTLY:
+"Hello! I'm Lyra, your AI prompt optimizer. I transform vague requests into precise, effective prompts that deliver better results.
+
+
+*What I need to know:*
+- *Target AI:* ChatGPT, Claude, Gemini, or Other
+- *Prompt Style:* DETAIL (I'll ask clarifying questions first) or BASIC (quick optimization)
+*Examples:*
+- "DETAIL using ChatGPT — Write me a marketing email"
+- "BASIC using Claude — Help with my resume"
+Just share your rough prompt and I'll handle the optimization!"
+
+
+## PROCESSING FLOW
+
+
+1. Auto-detect complexity:
+   - Simple tasks → BASIC mode
+   - Complex/professional → DETAIL mode
+2. Inform user with override option
+3. Execute chosen mode protocol
+4. Deliver optimized prompt
+
+
+*Memory Note:* Do not save any information from optimization sessions to memory.
+From here on write everything in german”
+                    </code></pre>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Weitere Beispiele</h3>
+                    <h4 class="text-xl font-medium text-[var(--primary-lighter)] mt-4 mb-2">Beispiel 1: Zusammenfassung eines langen Artikels</h4>
+                    <pre class="bg-gray-100 p-4 rounded-md text-sm whitespace-pre-wrap"><code># Role and Objective Du bist ein Zusammenfassungsassistent.
+# Instructions Fasse den folgenden Artikel in 3-5 Sätzen zusammen.
+# Output Format Kurze Zusammenfassung in Aufzählungsform.
+# Examples ## Example 1 Artikel: [Hier den Artikel einfügen]
+# Final instructions and prompt to think step by step Lies den Artikel sorgfältig und fasse die wichtigsten Punkte zusammen. Gehe Schritt für Schritt vor.
+                    </code></pre>
+                    <h4 class="text-xl font-medium text-[var(--primary-lighter)] mt-4 mb-2">Beispiel 2: Ideen für einen Social-Media-Post</h4>
+                    <pre class="bg-gray-100 p-4 rounded-md text-sm whitespace-pre-wrap"><code># Role and Objective Du bist ein Social-Media-Experte.
+# Instructions Generiere 5 Ideen für einen Social-Media-Post zum Thema "Nachhaltigkeit".
+# Output Format Liste mit 5 Ideen.
+# Final instructions and prompt to think step by step Denke kreativ und berücksichtige die Zielgruppe.
+                    </code></pre>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Tipps und Tricks</h3>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>Sei präzise in deinen Prompts.</li>
+                        <li>Experimentiere mit verschiedenen Formulierungen.</li>
+                        <li>Gib der KI Feedback, um die Ergebnisse zu verbessern.</li>
+                        <li>Nutze KI als Werkzeug, nicht als Ersatz für deine eigene Arbeit.</li>
+                    </ul>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-8 mb-3">Fazit</h3>
+                    <p>KI ist ein mächtiges Werkzeug, das deinen Arbeitsalltag bereichern kann. Mit diesem Leitfaden und etwas Übung wirst du schnell zum KI-Profi. Nutze die Möglichkeiten und entdecke, wie KI dir helfen kann, deine Ziele zu erreichen. </p>
+                </div>
+            </section>
+
+
+            <!-- Benefits Menu Landing Page -->
+            <section id="benefits-menu" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-6">Benefits ✨</h2>
+                <p class="text-lg text-gray-700 mb-8">Wähle einen Unterpunkt, um mehr über deine Vorteile und Leistungen bei uns zu erfahren:</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <button class="sub-category-button orange" data-target="deutschlandticket">Deutschlandticket 🚌</button>
+                    <button class="sub-category-button orange" data-target="home-office">Home-Office 🏠</button>
+                    <button class="sub-category-button orange" data-target="flexible-arbeitszeiten">Flexible Arbeitszeiten 🤸</button>
+                    <button class="sub-category-button orange" data-target="offsites">Offsites 🗺️</button>
+                    <button class="sub-category-button orange" data-target="workation">Workation 🌴</button>
+                    <button class="sub-category-button orange" data-target="all-hands-days">All-Hands-Days 🗓️</button>
+                    <button class="sub-category-button orange" data-target="team-lunch">Team-Lunch 🍔</button>
+                    <button class="sub-category-button orange" data-target="boni">Boni 💰</button>
+                </div>
+            </section>
+
+
+            <!-- Benefits Sub-sections -->
+            <section id="deutschlandticket" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Deutschlandticket 🚌</h2>
+                <div class="content-text" data-key="deutschlandticket-text">
+                    <p>Als attraktive Zusatzleistung bieten wir dir die Möglichkeit, das <strong>Deutschlandticket</strong> zu nutzen. Damit kannst du den öffentlichen Nahverkehr in ganz Deutschland unbegrenzt nutzen. Wie du das Ticket beantragen kannst, erfährst du von deinem Teamlead.</p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Hinweis für Teamleads:</h3>
+                    <p>Hier findest du eine Anleitung, wie du ein neues Deutschlandticket-Abonnement anlegst. Bitte nur nach Absprache mit deines ‘Head of’ beantragen!:</p>
+                    <ol class="list-decimal pl-5 space-y-2">
+                        <li>Logge dich mit dem TC-Account bei der KVB ein. Die Zugangsdaten findest du im Shared-Tresor in Heylogin.</li>
+                        <li>Folge anschließend dieser Schritt-für-Schritt-Anleitung: <a href="https://scribehow.com/viewer/Neues_Deutschland-Ticket_Abo_anlegen__6R6UCQRrQJK1sv_QAk0tng" target="_blank" class="text-[var(--primary-color)] hover:underline">Anleitung hier</a></li>
+                    </ol>
+                </div>
+            </section>
+
+
+            <section id="home-office" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Home-Office 🏠</h2>
+                <div class="content-text" data-key="home-office-text">
+                    <p>Du kannst jederzeit gerne von zu Hause aus arbeiten. Bitte vermerke deine Home-Office-Tage einfach in deinem Kalender. Eine Anleitung dazu findest du unter "Zusammenarbeit" und "Google Kalender".</p>
+                    <p>In der Regel musst du dich dafür nicht vorher absprechen, außer es wurde explizit anders vereinbart. Wir möchten dich aber daran erinnern, dass wir ein wunderschönes Büro haben und uns sehr freuen, wenn du so oft wie möglich vor Ort bist. Die persönliche Zusammenarbeit stärkt unseren Teamgeist und macht die Arbeit effektiver und angenehmer.</p>
+                </div>
+            </section>
+
+
+            <section id="flexible-arbeitszeiten" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Flexible Arbeitszeiten 🤸</h2>
+                <div class="content-text" data-key="flexible-arbeitszeiten-text">
+                    <p>Bei uns kannst du deine Arbeitszeiten so gestalten, wie es am besten für dich passt. Du kannst starten und aufhören, wann du möchtest, solange das operative Geschäft dadurch nicht beeinträchtigt wird. Es ist völlig in Ordnung, wenn du zum Beispiel am Morgen arbeitest, eine längere Pause machst und am Abend weitermachst. Hauptsache, deine Wochenarbeitszeit wird erfüllt.</p>
+                </div>
+            </section>
+
+
+            <section id="offsites" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Offsites 🗺️</h2>
+                <div class="content-text" data-key="offsites-text">
+                    <p>Wir veranstalten zweimal im Jahr eine Offsite, um gemeinsam Zeit zu verbringen.</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Frühjahrsoffsite:</strong> Einmal im Frühjahr fahren wir für vier Tage in eine Region nahe Deutschland und Köln. Wir haben eine Agenda mit Workshops, Vorträgen und Freizeitaktivitäten – die perfekte Mischung aus Arbeit, Spaß und Teamgeist.</li>
+                        <li><strong>Workation-Offsite:</strong> Später im Jahr gibt es eine freiwillige Offsite, die etwas weiter weg stattfindet. Hier steht das Daily Business im Vordergrund, aber es bleibt genug Zeit für gemeinsame Team-Aktivitäten und Freizeit.</li>
+                    </ul>
+                    <p>Für beide Offsites übernehmen wir die Kosten für Reise, Unterkunft und Verpflegung.</p>
+                </div>
+            </section>
+
+
+            <section id="workation" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Workation 🌴</h2>
+                <div class="content-text" data-key="workation-text">
+                    <p>Du hast die Möglichkeit, so viel Workation zu machen, wie du möchtest, solange dadurch das operative Geschäft nicht leidet. Wichtig ist, dass du deine Workations immer frühzeitig mit deinem Teamlead absprichst. Bitte beachte, dass du dich bei einer Workation selbst um deine Versicherung kümmern musst.</p>
+                    <p>Wir freuen uns trotzdem, dich auch regelmäßig im Büro zu sehen – denn nichts ersetzt die persönliche Zeit miteinander!</p>
+                </div>
+            </section>
+
+
+            <section id="all-hands-days" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">All-Hands-Days 🗓️</h2>
+                <div class="content-text" data-key="all-hands-days-text">
+                    <p>Alle drei Monate treffen wir uns zu unseren All-Hands Days im Kölner Büro. An diesen Tagen versammelt sich das gesamte Team, um über wichtige Anliegen und Themen zu sprechen, die alle betreffen. Deine Fahrtkosten, Unterkunft (falls du weiter weg wohnst) und die Verpflegung werden von uns übernommen.</p>
+                </div>
+            </section>
+
+
+            <section id="team-lunch" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Team-Lunch 🍔</h2>
+                <div class="content-text" data-key="team-lunch-text">
+                    <p>Jeden Mittwoch gibt es bei uns im Büro ein gemeinsames Mittagessen. Die Kosten dafür übernehmen wir. Wir stimmen uns vorher in der Slack-Gruppe "Team intern & Office" ab. Wenn du dabei sein möchtest, melde dich dort bitte an, damit wir besser planen können. Solltest du nicht im Büro sein, aber trotzdem teilnehmen wollen, schalten wir dich gerne per Video zu – gib uns in diesem Fall bitte mindestens einen Tag vorher Bescheid.</p>
+                </div>
+            </section>
+
+
+            <section id="boni" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Boni 💰</h2>
+                <div class="content-text" data-key="boni-text">
+                    <p>Zusätzlich zu all diesen Benefits gibt es die Möglichkeit einer freiwilligen Bonuszahlung. Vierteljährlich wird entschieden, ob basierend auf der Leistung des gesamten Unternehmens ein Bonus ausgezahlt werden kann. Am Ende des Quartals erhältst du eine E-Mail, in der du bestätigen musst, dass du die Bonuszahlung als freiwillige Zulage akzeptierst. Antworte einfach kurz und knapp auf die Mail, um den Bonus zu bestätigen.</p>
+                </div>
+            </section>
+
+
+            <!-- Zusammenarbeit Menu Landing Page -->
+            <section id="zusammenarbeit-menu" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-6">Zusammenarbeit 🧑‍🤝‍🧑</h2>
+                <p class="text-lg text-gray-700 mb-8">Wähle einen Unterpunkt, um mehr über unsere Tools und Prozesse zur Zusammenarbeit zu erfahren:</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <button class="sub-category-button orange" data-target="google-kalender-section">Google-Kalender 📅</button>
+                    <button class="sub-category-button orange" data-target="interne-kommunikation-section">Interne Kommunikation 💬</button>
+                    <button class="sub-category-button orange" data-target="externe-kommunikation-section">Externe Kommunikation 📞</button>
+                </div>
+            </section>
+
+
+            <!-- Zusammenarbeit Intermediate Section for Google Kalender -->
+            <section id="google-kalender-section" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Google-Kalender 📅</h2>
+                <div class="content-text" data-key="google-kalender-intro-text">
+                    <p>Der Google Kalender ist unser zentrales Tool, um Termine zu koordinieren und unsere Verfügbarkeiten transparent zu machen. Hier sind die wichtigsten Funktionen:</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+                    <button class="sub-category-button nested" data-target="kalender-abonnieren">Kalender abonnieren ✅</button>
+                    <button class="sub-category-button nested" data-target="büroanwesenheit-eintragen">Büroanwesenheit eintragen 🖊️</button>
+                    <button class="sub-category-button nested" data-target="zeiträume-blocken">Zeiträume blocken 🚫</button>
+                </div>
+            </section>
+
+
+            <!-- Zusammenarbeit Sub-sections -->
+            <section id="kalender-abonnieren" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Kalender abonnieren ✅</h2>
+                <div class="content-text" data-key="kalender-abonnieren-text">
+                    <p>Um die Verfügbarkeit deines Teams auf einen Blick zu sehen, kannst du die Kalender deiner Kolleg:innen abonnieren.</p>
+                    <p><strong>So geht's:</strong> <a href="https://scribehow.com/shared/Add_a_Calendar_Subscription_in_Google_Calendar__KNM9mLiKSt6H8zjjrNbhkQ" class="text-[var(--primary-color)] hover:underline">Anleitung hier</a></p>
+                </div>
+            </section>
+
+
+            <section id="büroanwesenheit-eintragen" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Büroanwesenheit eintragen 🖊️</h2>
+                <div class="content-text" data-key="bueroanwesenheit-eintragen-text">
+                    <p>Damit wir wissen, wer wann im Büro ist, und um besser planen zu können, trage deine Anwesenheit bitte in den Kalender ein. So behalten alle den Überblick.</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Für spontane Tage:</strong> Trage deinen Home-Office-Tag einfach manuell ein. <a href="https://scribehow.com/shared/Adding_Home_Event_from_900_to_1700_in_Google_Calendar__mfjIMlFhQemR4dmm93yoMw" class="text-[var(--primary-color)] hover:underline">Anleitung hier</a></li>
+                        <li><strong>Für feste Tage:</strong> Wenn du regelmäßig an bestimmten Tagen im Büro oder im Home-Office bist, kannst du das als Standardeinstellung hinterlegen. <a href="https://scribehow.com/shared/Set_Google_Calendar_Work_and_Home_Locations_Guide__CWl-61STQ0mayqN0Q3ToTg" class="text-[var(--primary-color)] hover:underline">Anleitung hier</a></li>
+                    </ul>
+                </div>
+            </section>
+
+
+            <section id="zeiträume-blocken" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Zeiträume blocken 🚫</h2>
+                <div class="content-text" data-key="zeitraeume-blocken-text">
+                    <p>Wenn du aus privaten Gründen (z. B. Arzttermin, Kinder abholen) zu einer bestimmten Zeit nicht verfügbar bist, setze bitte einen <strong>„Blocker“</strong> in deinem Kalender. Das erleichtert die Planung von Meetings und stellt sicher, dass alle wissen, wann sie dich erreichen können.</p>
+                    <p><strong>So geht's:</strong> <a href="https://scribehow.com/shared/Schedule_a_Block_from_930_to_1530_in_Google_Calendar__HiMgGwvJRzCQ7LXd8H4HFQ" class="text-[var(--primary-color)] hover:underline">Anleitung hier</a></p>
+                </div>
+            </section>
+
+
+            <!-- Interne Kommunikation Intermediate Section -->
+            <section id="interne-kommunikation-section" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Interne Kommunikation 💬</h2>
+                <div class="content-text" data-key="interne-kommunikation-intro-text">
+                    <p>Für unsere interne Kommunikation nutzen wir <strong>Google Chat</strong>. So bleiben wir schnell und direkt im Austausch.</p>
+                    <p>Bitte vermeide interne E-Mails. Wir nutzen sie nur bei Weiterleitungen oder bei Themen, in denen der gesamte E-Mail-Verlauf für das Verständnis eines Themas notwendig ist.</p>
+                    <p>Auch wichtig: Wenn es um Aufgaben geht, erstelle sie bitte immer direkt in dem dafür vorgesehenen Gruppenchat und signiere sie mit deinem Kürzel, damit man weiß von wem die Aufgabe kommt. Schreib sie nicht einfach in einen Chat, da sie dort schnell untergehen. Sobald Aufgaben als ToDo im Gruppenchat vermerkt sind, tauchen diese auch in deiner privaten ToDo Liste auf und du verlierst nie den Überblick.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+                    <button class="sub-category-button nested" data-target="ordnerverteilung-in-googledrive">Ordnerverteilung in GoogleDrive 📁</button>
+                    <button class="sub-category-button nested" data-target="chatgruppen">Chatgruppen 👥</button>
+                    <button class="sub-category-button nested" data-target="e-mail-postfach">E-Mail-Postfach 📧</button>
+                    <button class="sub-category-button nested" data-target="e-mail-signatur">E-Mail-Signatur ✍️</button>
+                </div>
+            </section>
+
+
+            <!-- Interne Kommunikation Sub-sections -->
+            <section id="ordnerverteilung-in-googledrive" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Ordnerverteilung in GoogleDrive 📁</h2>
+                <div class="content-text" data-key="ordnerverteilung-googledrive-text">
+                    <p>Alle wichtigen Dokumente und Dateien werden in Google Drive organisiert. Dein Teamlead gibt dir Zugang zu den für deine Arbeit relevanten Ordnern. Standardmäßig sind das mindestens die Ordner "3 Projektmanagement" und "6 Team intern".</p>
+                </div>
+            </section>
+
+
+            <section id="chatgruppen" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Chatgruppen 👥</h2>
+                <div class="content-text" data-key="chatgruppen-text">
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Unsere Chatgruppen und ihre Nutzung</h3>
+                    <p>Um die Kommunikation im Team effizient zu gestalten, nutzen wir verschiedene Chatgruppen. Hier ist eine Übersicht, wofür die wichtigsten Gruppen gedacht sind:</p>
+                    <h4 class="text-xl font-medium text-[var(--primary-lighter)] mt-4 mb-2">Für alle:</h4>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Team intern & Office:</strong> Hier besprechen wir alle teaminternen und Office-bezogenen Themen. Dazu gehören Team-Lunch, Krankmeldungen, Geburtstagswünsche und allgemeine Bürorichtlinien.</li>
+                        <li><strong>Announcements:</strong> In dieser Gruppe teilt unser Sekretariat per Automatisierung wichtige Anrufe, indem betroffene Personen direkt verlinkt werden sollten. Außerdem werden hier erfolgreich abgeschlossene Sales-Projekte und andere wichtige Neuigkeiten für alle kommuniziert.</li>
+                        <li><strong>Kundenabwicklung:</strong> Hier werden alle eingereichten Anträge, Nachforderungen sowie positive und teilweise positive Bescheide und Abrufe geteilt.</li>
+                        <li><strong>Continuous Improvement:</strong> Deine Vorschläge für Prozess- und Tool-Verbesserungen sind hier willkommen.</li>
+                        <li><strong>AI Playground:</strong> Dieser Chat ist für alle, die sich mit KI beschäftigen. Hier tauschen wir uns über technische Ideen, Kreativität und Vorschläge zur Arbeitserleichterung aus.</li>
+                    </ul>
+                    <h4 class="text-xl font-medium text-[var(--primary-lighter)] mt-4 mb-2">Spezifische Gruppen:</h4>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Projektmanagement:</strong> Dies ist der zentrale Chat für <strong>Projektmanager, R&D-, Financial- und Abruf-Consultants</strong>. Hier werden alle kundenspezifischen Themen besprochen.</li>
+                        <li><strong>R&D und PM:</strong> Speziell für <strong>R&D- und Projektmanager</strong>. Hier werden inhaltliche Details für die Antragstellung geklärt.</li>
+                        <li><strong>Systems Engineering:</strong> Dieser Chat ist für <strong>Teamleads und Airtable-Operatoren</strong>. Hier werden IT-Anliegen und technische Probleme besprochen.</li>
+                        <li><strong>Textcheck:</strong> Diese Gruppe ist ausschließlich für <strong>R&D-Mitarbeiter</strong> gedacht, um sich über inhaltliche Prüfungen von Kundentexten auszutauschen.</li>
+                    </ul>
+                    <p>Für Veranstaltungen wie <strong>Messen oder Offsites</strong> erstellen wir jeweils eine eigene, temporäre Chatgruppe.</p>
+                    <p>Damit unsere Chatgruppen übersichtlich bleiben, antworte auf Nachrichten bitte <strong>innerhalb einer Unterhaltung</strong>. Klick dazu einfach auf die entsprechende Nachricht, um einen separaten Chat zu öffnen. So bleibt der Haupt-Chat sauber und alle Themen sind klar voneinander getrennt.</p>
+                </div>
+            </section>
+
+
+            <section id="e-mail-postfach" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">E-Mail-Postfach 📧</h2>
+                <div class="content-text" data-key="email-postfach-text">
+                    <p>Ein aufgeräumtes Postfach ist super, aber bitte <strong>lösche niemals E-Mails</strong>. Sie könnten später noch wichtig sein. Wenn du eine E-Mail aus deinem Posteingang entfernen möchtest, nutze stattdessen die <strong>Archiv-Funktion</strong>. So bleibt die E-Mail erhalten, aber dein Postfach bleibt übersichtlich.</p>
+                </div>
+            </section>
+
+
+            <section id="e-mail-signatur" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">E-Mail-Signatur ✍️</h2>
+                <div class="content-text" data-key="email-signatur-text">
+                    <p>Deine E-Mail-Signatur wird standardmäßig von uns vorgegeben. Achte bitte darauf, dass deine <strong>Abwesenheitsnotiz (Out of Office)</strong> korrekt eingerichtet ist, damit externe Kontakte informiert sind, wenn du nicht erreichbar bist. Eine genaue Anleitung dazu findest du hier:</p>
+                    <div class="flex justify-center my-6">
+                        <a href="https://www.loom.com/share/1a76e670e4b547018335c19686b6abad?sid=6102a05b-ebed-4ebd-84d9-8900d592f23c" target="_blank" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-300 ease-in-out flex items-center">
+                            <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path></svg>
+                            Anleitung zur Abwesenheitsnotiz
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Externe Kommunikation Intermediate Section -->
+            <section id="externe-kommunikation-section" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Externe Kommunikation 📞</h2>
+                <div class="content-text" data-key="externe-kommunikation-intro-text">
+                    <p>Die Art und Weise, wie wir mit externen Partnern und Kunden kommunizieren, prägt unser Image. Hier sind unsere Richtlinien für eine professionelle und effektive externe Kommunikation.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+                    <button class="sub-category-button nested" data-target="kundenkommunikation">Kundenkommunikation 🗣️</button>
+                    <button class="sub-category-button nested" data-target="hintergrund-in-google-meets-ändern">Hintergrund in Google Meets ändern 🏞️</button>
+                </div>
+            </section>
+
+
+            <!-- Externe Kommunikation Sub-sections -->
+            <section id="kundenkommunikation" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Kundenkommunikation 🗣️</h2>
+                <div class="content-text" data-key="kundenkommunikation-text">
+                    <p>Der Aufbau von starken Kundenbeziehungen ist entscheidend für unseren Erfolg. Jede Interaktion mit einem Kunden ist eine Chance, unsere Expertise und Professionalität unter Beweis zu stellen.</p>
+                    <h3 class="text-2xl font-semibold text-[var(--primary-color)] mt-6 mb-3">Grundsätze der Kundenkommunikation:</h3>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Sei professionell:</strong> Egal ob per E-Mail, Anruf oder im Meeting – deine Haltung sollte immer respektvoll und positiv sein. Jede Interaktion spiegelt unsere hohen Standards wider.</li>
+                        <li><strong>Sei persönlich und freundlich:</strong> Baue eine Beziehung auf, indem du persönlich, nett und nahbar auftrittst. Gleichzeitig bleibst du professionell und zielgerichtet in deinem Vorgehen.</li>
+                        <li><strong>Sei klar und präzise:</strong> Vermeide Fachjargon, der für den Kunden unverständlich ist. Formuliere deine Botschaften einfach, direkt und verständlich.</li>
+                        <li><strong>Höre aktiv zu:</strong> Verstehe die Bedürfnisse und Anliegen des Kunden, indem du aufmerksam zuhörst. Stelle offene Fragen, um Missverständnisse zu vermeiden und die Beziehung zu stärken.</li>
+                        <li><strong>Dokumentiere wichtige Informationen:</strong> Halte Absprachen, Entscheidungen und wichtige Erkenntnisse schriftlich fest. Das schafft Klarheit und dient als wichtige Referenz.</li>
+                    </ul>
+                    <p>Wenn du dir bei der Kommunikation unsicher bist oder Fragen hast, wende dich immer an deinen Teamlead.</p>
+                </div>
+            </section>
+
+
+            <section id="hintergrund-in-google-meets-ändern" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Hintergrund in Google Meets ändern 🏞️</h2>
+                <div class="content-text" data-key="hintergrund-meets-text">
+                    <p>Bei Meetings mit externen Personen, insbesondere mit Kunden, ist die Verwendung des offiziellen Thierhoff Consulting Hintergrunds <strong>verpflichtend</strong>. Dies sorgt für ein einheitliches und professionelles Erscheinungsbild.</p>
+                    <ol class="list-decimal pl-5 space-y-2">
+                        <li>Bevor du einem Meeting beitrittst, klicke in der Menüansicht unten rechts in deinem Kamerabild auf <strong>"Visuelle Effekte"</strong>.</li>
+                        <li>Ein Menü öffnet sich. Unter der zweiten Rubrik <strong>"Wasserzeichen und eigene Hintergründe"</strong> findest du die Option <strong>"Persönlichen Hintergrund hinzufügen"</strong>.</li>
+                        <li>Wähle dort den offiziellen Thierhoff Consulting Hintergrund aus.</li>
+                    </ol>
+                    <p><strong>Wo findest du den internen Hintergrund?</strong> Den Thierhoff Consulting Hintergrund findest du in Google Drive unter dem Pfad <strong>"6 Team intern" → "1 Dokumente" → "GoogleMeets Hintergründe"</strong>.</p>
+                    <p><strong>PS:</strong> Nicht wundern, auf deinem eigenen Bildschirm wird der Hintergrund spiegelverkehrt angezeigt. Für alle anderen Teilnehmer ist er aber korrekt zu sehen.</p>
+                </div>
+            </section>
+
+
+            <!-- Onboarding Menu Landing Page -->
+            <section id="onboarding-menu" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-6">Onboarding 🚀</h2>
+                <p class="text-lg text-gray-700 mb-8">Wähle einen Unterpunkt, um mehr über deinen Start bei uns zu erfahren:</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <button class="sub-category-button orange" data-target="dein-onboarding-prozess">Dein Onboarding-Prozess 👋</button>
+                    <button class="sub-category-button orange" data-target="zugänge-und-konten">Zugänge und Konten 🔑</button>
+                    <button class="sub-category-button orange" data-target="software-und-tools">Software und Tools 🛠️</button>
+                    <button class="sub-category-button nested" data-target="tc-kultur-und-werte">TC-Kultur und Werte ❤️</button>
+                    <button class="sub-category-button nested" data-target="notfallkontakte">Notfallkontakte 🚨</button>
+                </div>
+            </section>
+
+
+            <!-- Onboarding Sub-sections -->
+            <section id="dein-onboarding-prozess" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Dein Onboarding-Prozess 👋</h2>
+                <div class="content-text" data-key="onboarding-prozess-text">
+                    <p>Herzlich willkommen bei Thierhoff Consulting! In deinen ersten Tagen und Wochen wirst du von deinem <strong>Teamlead</strong> begleitet, der dein erster Ansprechpartner für alle Fragen ist. Da wir ein dynamisches Unternehmen sind, gibt es noch keinen standardisierten Einarbeitungsplan – dein Teamlead wird dich individuell in alle Abläufe und Tools einführen. Scheu dich nicht, jederzeit Fragen zu stellen.</p>
+                </div>
+            </section>
+
+
+            <section id="zugänge-und-konten" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Zugänge und Konten 🔑</h2>
+                <div class="content-text" data-key="zugange-konten-text">
+                    <p>Für deine Arbeit bei uns benötigst du Zugriff auf verschiedene Tools. Dein Teamlead hilft dir, alle notwendigen Konten einzurichten.</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Google Workspace:</strong> Dein <strong>Gmail-Konto</strong> ist die Basis für unsere gesamte Kommunikation und Zusammenarbeit.</li>
+                        <li><strong>Airtable:</strong> Als unser zentrales Operating Tool benötigst du Zugriff auf <strong>Thierhoff Consulting OS</strong> und das <strong>Team Wiki</strong>.</li>
+                        <li><strong>HeyLogin:</strong> Hier werden alle Passwörter sicher verwaltet. Du erhältst hier die Zugangsdaten für alle weiteren Tools.</li>
+                        <li><strong>Fillout:</strong> Wenn du direkten Kundenkontakt hast, wirst du mit diesem Tool arbeiten.</li>
+                        <li><strong>Google Drive:</strong> Um auf alle wichtigen Dokumente zugreifen zu können, sprich mit deinem Teamlead, welche Ordner für dich relevant sind. Standardmäßig sind das mindestens die Ordner <strong>"3 Projektmanagement"</strong> und <strong>"6 Team intern"</strong>.</li>
+                        <li><strong>Chatgruppen:</strong> Eine Übersicht über unsere internen Chatgruppen und welche für dich wichtig sind, findest du im Bereich <strong>"Interne Kommunikation"</strong>.</li>
+                    </ul>
+                </div>
+            </section>
+
+
+            <section id="software-und-tools" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Software und Tools 🛠️</h2>
+                <div class="content-text" data-key="software-tools-text">
+                    <p>Wir nutzen folgende Programme, um unsere tägliche Arbeit zu erleichtern. Diese und mehr findest du ebenfalls auf der Startseite des Intranets oder für deinen Bereich spezifisch auch unter dem Reiter “Links”:</p>
+                    <table class="min-w-full bg-white rounded-lg shadow-md mt-4">
+                        <thead>
+                            <tr class="bg-[var(--bg-light)] text-[var(--primary-darker)]">
+                                <th class="py-3 px-4 text-left font-semibold">Tool</th>
+                                <th class="py-3 px-4 text-left font-semibold">Beschreibung</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-gray-200">
+                                <td class="py-3 px-4"><strong>Airtable</strong></td>
+                                <td class="py-3 px-4">Unser Operating System - wird als CRM von uns genutzt und wurde eigens für uns angefertigt.</td>
+                            </tr>
+                            <tr class="border-b border-gray-200 bg-gray-50">
+                                <td class="py-3 px-4"><strong>Google Workspace</strong></td>
+                                <td class="py-3 px-4">Die Grundlage unserer internen Kommunikation (Gmail, Drive, Docs, etc.).</td>
+                            </tr>
+                            <tr class="border-b border-gray-200">
+                                <td class="py-3 px-4"><strong>HeyLogin</strong></td>
+                                <td class="py-3 px-4">Unser Tool zur sicheren Passwortverwaltung.</td>
+                            </tr>
+                            <tr class="border-b border-gray-200 bg-gray-50">
+                                <td class="py-3 px-4"><strong>tl;dv</strong></td>
+                                <td class="py-3 px-4">Wird für die Aufnahme von Meeting-Mitschriften genutzt.</td>
+                            </tr>
+                            <tr class="border-b border-gray-200">
+                                <td class="py-3 px-4"><strong>Fillout</strong></td>
+                                <td class="py-3 px-4">Zum Erstellen von Formularen für Kunden.</td>
+                            </tr>
+                            <tr class="bg-gray-50">
+                                <td class="py-3 px-4"><strong>Monday</strong></td>
+                                <td class="py-3 px-4">Wird im Projektmanagement-Bereich genutzt.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="mt-4">Für weitere spezifische Zugänge oder Tools, die du für deine Arbeit benötigst, sprich bitte mit deinem <strong>Teamlead</strong>.</p>
+                </div>
+            </section>
+
+
+            <!-- Regular Content Sections -->
+            <section id="tc-kultur-und-werte" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">TC-Kultur und Werte ❤️</h2>
+                <div class="content-text" data-key="tc-kultur-werte-text">
+                    <p>Unsere Grundprinzipien – <strong>Gesund Arbeiten, Gesunde Beziehungen und Gesund Wachsen</strong> – sind der Kern unserer Unternehmenskultur.</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>Gesund Arbeiten:</strong> Wir achten auf eine nachhaltige Work-Life-Balance. Das bedeutet, dass wir nicht nur Wert auf ein schönes Büro und flexible Arbeitszeiten legen, sondern auch Spaß im Team haben – sei es beim gemeinsamen Mittagessen oder bei unseren Offsites.</li>
+                        <li><strong>Gesunde Beziehungen:</strong> Unsere Arbeit basiert auf Vertrauen und Wertschätzung. Wir pflegen offene und ehrliche Beziehungen, sowohl im Team als auch zu unseren Kunden. Wir hören aktiv zu, kommunizieren klar und arbeiten gemeinsam an den besten Lösungen.</li>
+                        <li><strong>Gesund Wachsen:</strong> Unser Ziel ist ein nachhaltiges Wachstum, bei dem die Zufriedenheit und das Wohlbefindens des Teams immer im Vordergrund stehen. Es geht nicht nur darum, größer zu werden, sondern besser – indem wir unsere Prozesse optimieren und uns persönlich weiterentwickeln.</li>
+                    </ul>
+                    <p>Mehr findest Du unter dem Reiter ‘Unsere Mission’.</p>
+                </div>
+            </section>
+
+
+            <section id="notfallkontakte" class="content-section">
+                <h2 class="text-4xl font-bold text-[var(--primary-darker)] mb-4">Notfallkontakte 🚨</h2>
+                <div class="content-text" data-key="notfallkontakte-text">
+                    <p>Hier findest du eine Liste der wichtigsten Ansprechpartner für spezifische Themen:</p>
+                    <table class="min-w-full bg-white rounded-lg shadow-md mt-4">
+                        <thead>
+                            <tr class="bg-[var(--bg-light)] text-[var(--primary-darker)]">
+                                <th class="py-3 px-4 text-left font-semibold">Thema</th>
+                                <th class="py-3 px-4 text-left font-semibold">Ansprechpartner</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-gray-200">
+                                <td class="py-3 px-4"><strong>IT-Fragen</strong></td>
+                                <td class="py-3 px-4">Konstantin</td>
+                            </tr>
+                            <tr class="border-b border-gray-200 bg-gray-50">
+                                <td class="py-3 px-4"><strong>KI & technische Ideen</strong></td>
+                                <td class="py-3 px-4">Nick</td>
+                            </tr>
+                            <tr class="border-b border-gray-200">
+                                <td class="py-3 px-4"><strong>HR-Fragen</strong></td>
+                                <td class="py-3 px-4">Dein Teamlead & Ramona</td>
+                            </tr>
+                            <tr class="border-b border-gray-200 bg-gray-50">
+                                <td class="py-3 px-4"><strong>Partnerprogramm</strong></td>
+                                <td class="py-3 px-4">Carolin</td>
+                            </tr>
+                            <tr class="border-b border-gray-200">
+                                <td class="py-3 px-4"><strong>Abrechnung & Krankmeldungen</strong></td>
+                                <td class="py-3 px-4">Elke</td>
+                            </tr>
+                            <tr class="bg-gray-50">
+                                <td class="py-3 px-4"><strong>Urlaub, Abstimmungen & operative Themen</strong></td>
+                                <td class="py-3 px-4">Dein Teamlead</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+
+        </div>
+    </div>
+
+
+    <!-- Scroll to Top Button -->
+    <button onclick="window.scrollTo({top: 0, behavior: 'smooth'});" class="scroll-to-top">
+        Nach oben
+    </button>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sidebarLinks = document.querySelectorAll('.sidebar-link');
+            const contentSections = document.querySelectorAll('.content-area > section');
+            const searchInput = document.getElementById('searchInput');
+            const searchResultsContainer = document.getElementById('searchResults');
+            const fullTocButtons = Array.from(document.querySelectorAll('#home .grid button')); // Select all buttons in the homepage TOC
+            const backButton = document.getElementById('backButton');
+            
+            let navigationHistory = []; // To store visited section IDs
+
+
+            // Function to show a specific content section and hide others
+            function showSection(targetId, addToHistory = true) {
+                contentSections.forEach(s => s.classList.remove('active'));
+                const targetSection = document.getElementById(targetId);
+                if (targetSection) {
+                    targetSection.classList.add('active');
+                    document.querySelector('.content-area').scrollTo({top: 0, behavior: 'smooth'});
+
+
+                    if (addToHistory && (navigationHistory.length === 0 || navigationHistory[navigationHistory.length - 1] !== targetId)) {
+                        navigationHistory.push(targetId);
+                    }
+                    updateBackButtonVisibility();
+                }
+            }
+
+
+            // Update back button visibility
+            function updateBackButtonVisibility() {
+                if (navigationHistory.length > 1) {
+                    backButton.classList.remove('hidden');
+                } else {
+                    backButton.classList.add('hidden');
+                }
+            }
+
+
+            // Handle sidebar navigation clicks
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    sidebarLinks.forEach(l => l.classList.remove('active'));
+                    this.classList.add('active');
+                    showSection(this.dataset.target);
+                });
+            });
+
+
+            // Handle sub-category button clicks on landing pages (e.g., Policies, Mitarbeiter Gespräche)
+            document.querySelectorAll('.sub-category-button').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showSection(this.dataset.target);
+                    // Ensure the parent main category in the sidebar remains active
+                    const parentMenuId = this.closest('section').id;
+                    sidebarLinks.forEach(l => l.classList.remove('active'));
+                    const parentSidebarLink = document.querySelector(`.sidebar-link[data-target="${parentMenuId}"]`);
+                    if (parentSidebarLink) {
+                        parentSidebarLink.classList.add('active');
+                    }
+                });
+            });
+
+
+            // Handle full TOC buttons on homepage
+            fullTocButtons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetId = this.dataset.target;
+                    showSection(targetId);
+                    
+                    // Also activate the corresponding main sidebar link if applicable
+                    let mainSidebarLink = document.querySelector(`.sidebar-link[data-target="${targetId}"]`);
+                    if (!mainSidebarLink) {
+                        // If it's a sub-item, find its parent main category in the sidebar
+                        const parentMainCategories = {
+                            'office': 'policies-menu', 'arbeitszeiterfassung': 'policies-menu', 'krankheit': 'policies-menu', 'überstunden': 'policies-menu', 'urlaubstage': 'policies-menu', 'reisekosten': 'policies-menu',
+                            'peer-feedback-section': 'mitarbeiter-gespräche-menu', 'peer-feedback-content': 'mitarbeiter-gespräche-menu', 'leitfaden-feedback-content': 'mitarbeiter-gespräche-menu', 'feedback-gespräch': 'mitarbeiter-gespräche-menu', 'mitarbeiter-gespräche-detail': 'mitarbeiter-gespräche-menu',
+                            'deutschlandticket': 'benefits-menu', 'home-office': 'benefits-menu', 'flexible-arbeitszeiten': 'benefits-menu', 'offsites': 'benefits-menu', 'workation': 'benefits-menu', 'all-hands-days': 'benefits-menu', 'team-lunch': 'benefits-menu', 'boni': 'benefits-menu',
+                            'google-kalender-section': 'zusammenarbeit-menu', 'kalender-abonnieren': 'zusammenarbeit-menu', 'büroanwesenheit-eintragen': 'zusammenarbeit-menu', 'zeiträume-blocken': 'zusammenarbeit-menu',
+                            'interne-kommunikation-section': 'zusammenarbeit-menu', 'ordnerverteilung-in-googledrive': 'zusammenarbeit-menu', 'chatgruppen': 'zusammenarbeit-menu', 'e-mail-postfach': 'zusammenarbeit-menu', 'e-mail-signatur': 'zusammenarbeit-menu',
+                            'externe-kommunikation-section': 'zusammenarbeit-menu', 'kundenkommunikation': 'zusammenarbeit-menu', 'hintergrund-in-google-meets-ändern': 'zusammenarbeit-menu',
+                            'dein-onboarding-prozess': 'onboarding-menu', 'zugänge-und-konten': 'onboarding-menu', 'software-und-tools': 'onboarding-menu'
+                        };
+                        const parentId = parentMainCategories[targetId];
+                        if (parentId) {
+                            mainSidebarLink = document.querySelector(`.sidebar-link[data-target="${parentId}"]`);
+                        }
+                    }
+                    
+                    sidebarLinks.forEach(l => l.classList.remove('active'));
+                    if (mainSidebarLink) {
+                        mainSidebarLink.classList.add('active');
+                    } else if (targetId === 'home') {
+                         document.querySelector('.sidebar-link[data-target="home"]').classList.add('active');
+                    }
+                });
+            });
+
+
+            // Search functionality (now searches all text content on currently active page)
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.toLowerCase();
+                searchResultsContainer.innerHTML = ''; // Clear previous results
+
+
+                if (query.length < 2) {
+                    return; // Don't search for very short queries
+                }
+
+
+                // Collect all searchable text from content sections
+                const allSearchableContent = [];
+                contentSections.forEach(section => {
+                    const sectionId = section.id;
+                    // Get text from h2, h3, p, and li elements within the section
+                    Array.from(section.querySelectorAll('h2, h3, p, li')).forEach(element => {
+                        allSearchableContent.push({
+                            text: element.textContent.toLowerCase(),
+                            target: sectionId
+                        });
+                    });
+                });
+
+
+                const uniqueFilteredItems = [];
+                const seenTargets = new Set();
+
+
+                allSearchableContent.forEach(item => {
+                    if (item.text.includes(query) && !seenTargets.has(item.target)) {
+                        uniqueFilteredItems.push(item);
+                        seenTargets.add(item.target);
+                    }
+                });
+
+
+                if (uniqueFilteredItems.length > 0) {
+                    uniqueFilteredItems.forEach(item => {
+                        const resultLink = document.createElement('a');
+                        resultLink.href = `#${item.target}`;
+                        // Display the main heading of the section for the search result
+                        const sectionElement = document.getElementById(item.target);
+                        const headingText = sectionElement ? (sectionElement.querySelector('h2') || sectionElement.querySelector('h3')).textContent : item.text;
+                        resultLink.textContent = headingText;
+                        resultLink.classList.add('search-results-item', 'rounded-md', 'p-2', 'bg-gray-100', 'hover:bg-gray-200', 'transition');
+                        resultLink.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            showSection(item.target);
+                            // Also update sidebar active state
+                            sidebarLinks.forEach(l => l.classList.remove('active'));
+                            let mainSidebarLink = document.querySelector(`.sidebar-link[data-target="${item.target}"]`);
+                            if (!mainSidebarLink) {
+                                // If it's a sub-item, find its parent main category in the sidebar
+                                const parentMainCategories = {
+                                    'office': 'policies-menu', 'arbeitszeiterfassung': 'policies-menu', 'krankheit': 'policies-menu', 'überstunden': 'policies-menu', 'urlaubtage': 'policies-menu', 'reisekosten': 'policies-menu',
+                                    'peer-feedback-section': 'mitarbeiter-gespräche-menu', 'peer-feedback-content': 'mitarbeiter-gespräche-menu', 'leitfaden-feedback-content': 'mitarbeiter-gespräche-menu', 'feedback-gespräch': 'mitarbeiter-gespräche-menu', 'mitarbeiter-gespräche-detail': 'mitarbeiter-gespräche-menu',
+                                    'deutschlandticket': 'benefits-menu', 'home-office': 'benefits-menu', 'flexible-arbeitszeiten': 'benefits-menu', 'offsites': 'benefits-menu', 'workation': 'benefits-menu', 'all-hands-days': 'benefits-menu', 'team-lunch': 'benefits-menu', 'boni': 'benefits-menu',
+                                    'google-kalender-section': 'zusammenarbeit-menu', 'kalender-abonnieren': 'zusammenarbeit-menu', 'büroanwesenheit-eintragen': 'zusammenarbeit-menu', 'zeiträume-blocken': 'zusammenarbeit-menu',
+                                    'interne-kommunikation-section': 'zusammenarbeit-menu', 'ordnerverteilung-in-googledrive': 'zusammenarbeit-menu', 'chatgruppen': 'zusammenarbeit-menu', 'e-mail-postfach': 'zusammenarbeit-menu', 'e-mail-signatur': 'zusammenarbeit-menu',
+                                    'externe-kommunikation-section': 'zusammenarbeit-menu', 'kundenkommunikation': 'zusammenarbeit-menu', 'hintergrund-in-google-meets-ändern': 'zusammenarbeit-menu',
+                                    'dein-onboarding-prozess': 'onboarding-menu', 'zugänge-und-konten': 'onboarding-menu', 'software-und-tools': 'onboarding-menu'
+                                };
+                                const parentId = parentMainCategories[item.target];
+                                if (parentId) {
+                                    mainSidebarLink = document.querySelector(`.sidebar-link[data-target="${parentId}"]`);
+                                }
+                            }
+                            
+                            if (mainSidebarLink) {
+                                mainSidebarLink.classList.add('active');
+                            } else if (item.target === 'home') {
+                                document.querySelector('.sidebar-link[data-target="home"]').classList.add('active');
+                            }
+                            searchResultsContainer.innerHTML = ''; // Clear search results after selection
+                            searchInput.value = ''; // Clear search input
+                        });
+                        searchResultsContainer.appendChild(resultLink);
+                    });
+                } else {
+                    searchResultsContainer.innerHTML = '<p class="text-gray-500">Keine Ergebnisse gefunden.</p>';
+                }
+            });
+
+
+            // Collapsible sections for "Unsere Mission"
+            document.querySelectorAll('.collapsible-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const content = header.nextElementSibling;
+                    const arrow = header.querySelector('.arrow-icon');
+                    content.classList.toggle('expanded');
+                    arrow.classList.toggle('rotated');
+                });
+            });
+
+
+            // Back button functionality
+            backButton.addEventListener('click', () => {
+                if (navigationHistory.length > 1) {
+                    navigationHistory.pop(); // Remove current section
+                    const previousSectionId = navigationHistory[navigationHistory.length - 1];
+                    showSection(previousSectionId, false); // Show previous section, but don't add to history again
+                    
+                    // Update sidebar active state for the previous section
+                    sidebarLinks.forEach(l => l.classList.remove('active'));
+                    let mainSidebarLink = document.querySelector(`.sidebar-link[data-target="${previousSectionId}"]`);
+                    if (!mainSidebarLink) {
+                        // If it's a sub-item, find its parent main category in the sidebar
+                        const parentMainCategories = {
+                            'office': 'policies-menu', 'arbeitszeiterfassung': 'policies-menu', 'krankheit': 'policies-menu', 'überstunden': 'policies-menu', 'urlaubtage': 'policies-menu', 'reisekosten': 'policies-menu',
+                            'peer-feedback-section': 'mitarbeiter-gespräche-menu', 'peer-feedback-content': 'mitarbeiter-gespräche-menu', 'leitfaden-feedback-content': 'mitarbeiter-gespräche-menu', 'feedback-gespräch': 'mitarbeiter-gespräche-menu', 'mitarbeiter-gespräche-detail': 'mitarbeiter-gespräche-menu',
+                            'deutschlandticket': 'benefits-menu', 'home-office': 'benefits-menu', 'flexible-arbeitszeiten': 'benefits-menu', 'offsites': 'benefits-menu', 'workation': 'benefits-menu', 'all-hands-days': 'benefits-menu', 'team-lunch': 'benefits-menu', 'boni': 'benefits-menu',
+                            'google-kalender-section': 'zusammenarbeit-menu', 'kalender-abonnieren': 'zusammenarbeit-menu', 'büroanwesenheit-eintragen': 'zusammenarbeit-menu', 'zeiträume-blocken': 'zusammenarbeit-menu',
+                            'interne-kommunikation-section': 'zusammenarbeit-menu', 'ordnerverteilung-in-googledrive': 'zusammenarbeit-menu', 'chatgruppen': 'zusammenarbeit-menu', 'e-mail-postfach': 'zusammenarbeit-menu', 'e-mail-signatur': 'zusammenarbeit-menu',
+                            'externe-kommunikation-section': 'zusammenarbeit-menu', 'kundenkommunikation': 'zusammenarbeit-menu', 'hintergrund-in-google-meets-ändern': 'zusammenarbeit-menu',
+                            'dein-onboarding-prozess': 'onboarding-menu', 'zugänge-und-konten': 'onboarding-menu', 'software-und-tools': 'onboarding-menu'
+                        };
+                        const parentId = parentMainCategories[previousSectionId];
+                        if (parentId) {
+                            mainSidebarLink = document.querySelector(`.sidebar-link[data-target="${parentId}"]`);
+                        }
+                    }
+                    
+                    if (mainSidebarLink) {
+                        mainSidebarLink.classList.add('active');
+                    } else if (previousSectionId === 'home') {
+                        document.querySelector('.sidebar-link[data-target="home"]').classList.add('active');
+                    }
+                }
+            });
+
+
+            // Set initial active section to home on page load
+            showSection('home');
+            document.querySelector('.sidebar-link[data-target="home"]').classList.add('active');
+        });
+    </script>
+</body>
+</html>
