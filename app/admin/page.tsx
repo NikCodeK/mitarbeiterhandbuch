@@ -467,10 +467,16 @@ function AdminDashboardContent() {
 
     const previousParents = parents.slice()
     const optimisticParents = parents.slice()
-    ;[optimisticParents[currentIndex], optimisticParents[targetIndex]] = [
-      optimisticParents[targetIndex],
-      optimisticParents[currentIndex],
-    ]
+
+    optimisticParents[currentIndex] = {
+      ...targetParent,
+      sort: currentSort,
+    }
+    optimisticParents[targetIndex] = {
+      ...currentParent,
+      sort: targetSort,
+    }
+
     setParents(optimisticParents)
 
     try {
@@ -645,10 +651,16 @@ function AdminDashboardContent() {
 
     const previousEntries = entries.slice()
     const optimisticEntries = entries.slice()
-    ;[optimisticEntries[currentIndex], optimisticEntries[targetIndex]] = [
-      optimisticEntries[targetIndex],
-      optimisticEntries[currentIndex],
-    ]
+
+    optimisticEntries[currentIndex] = {
+      ...targetEntry,
+      sort: currentSort,
+    }
+    optimisticEntries[targetIndex] = {
+      ...currentEntry,
+      sort: targetSort,
+    }
+
     setEntries(optimisticEntries)
 
     try {
