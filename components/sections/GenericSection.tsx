@@ -159,7 +159,11 @@ export default function GenericSection({
               )}
             </div>
             <div className="prose prose-sm mt-6 max-w-none text-muted-foreground md:prose-base">
-              <MarkdownPreview source={entry.content_md ?? ''} className="bg-transparent" />
+              <MarkdownPreview
+                source={entry.content_md ?? ''}
+                className="bg-transparent"
+                wrapperElement={{ 'data-color-mode': 'light' }}
+              />
             </div>
           </article>
         ))}

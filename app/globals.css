@@ -103,4 +103,20 @@
   .rich-text a {
     @apply text-primary underline-offset-4 hover:underline;
   }
+
+  .wmde-markdown {
+    background-color: transparent !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  .wmde-markdown p,
+  .wmde-markdown li {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .wmde-markdown code,
+  .wmde-markdown pre {
+    background-color: hsl(var(--muted)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
 }

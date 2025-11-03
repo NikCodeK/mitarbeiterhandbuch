@@ -15,6 +15,11 @@ declare module '@uiw/react-markdown-preview' {
   import type * as React from 'react';
   type MarkdownPreviewProps = {
     source?: string;
+    className?: string;
+    wrapperElement?: {
+      'data-color-mode'?: 'light' | 'dark' | 'auto';
+      [key: string]: unknown;
+    };
     [key: string]: unknown;
   };
   const MarkdownPreview: React.FC<MarkdownPreviewProps>;
