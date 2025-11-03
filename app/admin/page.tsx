@@ -465,6 +465,14 @@ function AdminDashboardContent() {
     const currentSort = currentParent.sort ?? (currentIndex + 1) * 10
     const targetSort = targetParent.sort ?? (targetIndex + 1) * 10
 
+    const previousParents = parents.slice()
+    const optimisticParents = parents.slice()
+    ;[optimisticParents[currentIndex], optimisticParents[targetIndex]] = [
+      optimisticParents[targetIndex],
+      optimisticParents[currentIndex],
+    ]
+    setParents(optimisticParents)
+
     try {
       const response = await fetch("/api/handbook/sort", {
         method: "POST",
@@ -485,8 +493,10 @@ function AdminDashboardContent() {
 
       await refreshParents(targetParent.id)
       setSelectedParentId(currentParent.id)
+      setMessage("Sortierung aktualisiert.")
     } catch (error) {
       console.error("Failed to move parent", error)
+      setParents(previousParents)
       setMessage("Sortierung konnte nicht aktualisiert werden.")
     }
   }
@@ -633,6 +643,14 @@ function AdminDashboardContent() {
     const currentSort = currentEntry.sort ?? (currentIndex + 1) * 10
     const targetSort = targetEntry.sort ?? (targetIndex + 1) * 10
 
+    const previousEntries = entries.slice()
+    const optimisticEntries = entries.slice()
+    ;[optimisticEntries[currentIndex], optimisticEntries[targetIndex]] = [
+      optimisticEntries[targetIndex],
+      optimisticEntries[currentIndex],
+    ]
+    setEntries(optimisticEntries)
+
     try {
       const response = await fetch("/api/handbook/sort", {
         method: "POST",
@@ -660,8 +678,10 @@ function AdminDashboardContent() {
       const fetchedEntries: Entry[] = json.entries ?? []
       setEntries(fetchedEntries)
       setSelectedEntryId(currentEntry.id)
+      setMessage("Eintrags-Reihenfolge aktualisiert.")
     } catch (error) {
       console.error("Failed to move entry", error)
+      setEntries(previousEntries)
       setMessage("Eintrags-Reihenfolge konnte nicht aktualisiert werden.")
     }
   }
