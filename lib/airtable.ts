@@ -98,8 +98,9 @@ async function readJson<T>(
     if (response.status === 429) {
       const retryAfterSeconds = parseRetryAfter(response.headers.get('retry-after'));
       if (attempt < MAX_RETRY_ATTEMPTS) {
-        const retryDelayMs = (retryAfterSeconds ?? 0) > 0
-          ? retryAfterSeconds * 1000
+        const safeRetrySeconds = retryAfterSeconds ?? 0;
+        const retryDelayMs = safeRetrySeconds > 0
+          ? safeRetrySeconds * 1000
           : FALLBACK_RETRY_DELAY_MS * attempt;
         await delay(retryDelayMs);
         return readJson<T>(input, init, attempt + 1);
