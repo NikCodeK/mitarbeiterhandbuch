@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import { ArrowLeft, LayoutList, Pencil, Plus } from 'lucide-react';
-import MarkdownPreview from '@uiw/react-markdown-preview';
-import '@uiw/react-markdown-preview/markdown.css';
 
 import type { Entry, Parent } from '../../lib/types';
 import { cn } from '../../lib/utils';
+import { MarkdownRenderer } from '../ui/MarkdownRenderer';
 
 type GenericSectionProps = {
   parents: Parent[];
@@ -158,13 +157,10 @@ export default function GenericSection({
                 </Link>
               )}
             </div>
-            <div className="prose prose-sm mt-6 max-w-none text-muted-foreground md:prose-base">
-              <MarkdownPreview
-                source={entry.content_md ?? ''}
-                className="bg-transparent"
-                wrapperElement={{ 'data-color-mode': 'light' }}
-              />
-            </div>
+            <MarkdownRenderer
+              content={entry.content_md ?? ''}
+              className="mt-6"
+            />
           </article>
         ))}
 
