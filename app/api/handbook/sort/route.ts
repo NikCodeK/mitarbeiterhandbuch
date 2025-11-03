@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { atUpdate } from '../../../../lib/airtable';
+import { AirtableConfigError, atUpdate } from '../../../../lib/airtable';
 import { verify } from '../../../../lib/auth';
 
 const PARENT_TABLE = process.env.AIRTABLE_PARENTS;
@@ -26,10 +26,11 @@ async function readAdminSession(req: Request) {
 }
 
 function requireTable(name: string | undefined, envKey: string) {
-  if (!name) {
-    throw new Error(`Missing required env var ${envKey}`);
+  const value = name?.trim();
+  if (!value) {
+    throw new AirtableConfigError(`Missing required env var ${envKey}`);
   }
-  return name;
+  return value;
 }
 
 export async function POST(request: Request) {
@@ -57,6 +58,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      return NextResponse.json(
+        { error: error.message, requiresConfig: true },
+        { status: 503 },
+      );
+    }
     console.error('[sort] failed to swap order', error);
     const message = error instanceof Error ? error.message : 'Unable to update order';
     return NextResponse.json({ error: message }, { status: 500 });

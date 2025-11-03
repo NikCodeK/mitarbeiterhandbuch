@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { atGet, atUpdate } from '../../../../../lib/airtable';
+import { AirtableConfigError, atGet, atUpdate } from '../../../../../lib/airtable';
 import { verify } from '../../../../../lib/auth';
 import type { Entry } from '../../../../../lib/types';
 
@@ -18,11 +18,12 @@ type AirtableEntry = {
   };
 };
 
-function ensureTableName(envValue: string | undefined, fallbackName: string) {
-  if (!envValue) {
-    throw new Error(`Missing required env var ${fallbackName}`);
+function ensureTableName(envValue: string | undefined, envKey: string) {
+  const value = envValue?.trim();
+  if (!value) {
+    throw new AirtableConfigError(`Missing required env var ${envKey}`);
   }
-  return envValue;
+  return value;
 }
 
 async function readAdminSession(req: NextRequest) {
@@ -60,6 +61,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json({ entry });
   } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      return NextResponse.json(
+        { error: error.message, requiresConfig: true },
+        { status: 503 },
+      );
+    }
     console.error('[entry] failed to load record', error);
     return NextResponse.json({ error: 'Unable to load entry' }, { status: 500 });
   }
@@ -107,6 +114,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     await atUpdate(table, id, fields);
     return NextResponse.json({ ok: true, id });
   } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      return NextResponse.json(
+        { error: error.message, requiresConfig: true },
+        { status: 503 },
+      );
+    }
     console.error('[entry] failed to save record', error);
     return NextResponse.json({ error: 'Unable to save entry' }, { status: 500 });
   }

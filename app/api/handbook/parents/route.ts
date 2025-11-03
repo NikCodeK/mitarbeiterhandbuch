@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { atCreate, atList, atUpdate } from '../../../../lib/airtable';
+import { AirtableConfigError, atCreate, atList, atUpdate } from '../../../../lib/airtable';
 import type { Parent } from '../../../../lib/types';
 import { verify } from '../../../../lib/auth';
 
@@ -14,11 +14,12 @@ type AirtableRecord = {
   };
 };
 
-function ensureTableName(envValue: string | undefined, fallbackName: string) {
-  if (!envValue) {
-    throw new Error(`Missing required env var ${fallbackName}`);
+function ensureTableName(envValue: string | undefined, envKey: string) {
+  const value = envValue?.trim();
+  if (!value) {
+    throw new AirtableConfigError(`Missing required env var ${envKey}`);
   }
-  return envValue;
+  return value;
 }
 
 async function readAdminSession(req: Request) {
@@ -65,6 +66,17 @@ export async function GET() {
 
     return NextResponse.json({ parents });
   } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      console.warn('[parents] missing Airtable configuration', error.message);
+      return NextResponse.json(
+        {
+          parents: [],
+          warning: error.message,
+          requiresConfig: true,
+        },
+        { status: 200 },
+      );
+    }
     console.error('[parents] failed to load data', error);
     const message = error instanceof Error
       ? error.message
@@ -121,6 +133,12 @@ export async function POST(request: Request) {
     await atUpdate(table, id, fields);
     return NextResponse.json({ ok: true, id });
   } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      return NextResponse.json(
+        { error: error.message, requiresConfig: true },
+        { status: 503 },
+      );
+    }
     console.error('[parents] failed to save data', error);
     return NextResponse.json({ error: 'Unable to save parent' }, { status: 500 });
   }

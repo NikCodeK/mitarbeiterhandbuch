@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { atCreate, atList, atUpdate } from '../../../../lib/airtable';
+import { AirtableConfigError, atCreate, atList, atUpdate } from '../../../../lib/airtable';
 import type { Entry } from '../../../../lib/types';
 import { verify } from '../../../../lib/auth';
 
@@ -25,11 +25,12 @@ const STATUS_TO_AIRTABLE: Record<NonNullable<Entry['status']>, string> = {
   Published: 'Published ',
 };
 
-function ensureTableName(envValue: string | undefined, fallbackName: string) {
-  if (!envValue) {
-    throw new Error(`Missing required env var ${fallbackName}`);
+function ensureTableName(envValue: string | undefined, envKey: string) {
+  const value = envValue?.trim();
+  if (!value) {
+    throw new AirtableConfigError(`Missing required env var ${envKey}`);
   }
-  return envValue;
+  return value;
 }
 
 async function readAdminSession(req: Request) {
@@ -126,6 +127,17 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ entries });
   } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      console.warn('[entries] missing Airtable configuration', error.message);
+      return NextResponse.json(
+        {
+          entries: [],
+          warning: error.message,
+          requiresConfig: true,
+        },
+        { status: 200 },
+      );
+    }
     console.error('[entries] failed to load data', error);
     const message = error instanceof Error ? error.message : 'Unable to load entries';
     return NextResponse.json({
@@ -186,6 +198,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, id: newId });
   } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      return NextResponse.json(
+        { error: error.message, requiresConfig: true },
+        { status: 503 },
+      );
+    }
     console.error('[entries] failed to save entry', error);
     const message = error instanceof Error ? error.message : 'Unable to save entry';
     return NextResponse.json({ error: message }, { status: 500 });

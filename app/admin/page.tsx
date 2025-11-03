@@ -57,7 +57,11 @@ function AdminDashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  const missingConfigMessage =
+    "Airtable ist nicht konfiguriert. Bitte setze die benötigten Umgebungsvariablen oder verwende lokale Inhalte."
+
   const [message, setMessage] = useState<string>("")
+  const [configWarning, setConfigWarning] = useState<string>("")
   const [requestedParentId, setRequestedParentId] = useState<string | null>(null)
   const [requestedEntryId, setRequestedEntryId] = useState<string | null>(null)
   const [shouldCreateEntry, setShouldCreateEntry] = useState(false)
@@ -196,6 +200,13 @@ function AdminDashboardContent() {
           throw new Error(`parents request failed: ${response.status}`)
         }
         const json = await response.json()
+        const warningMessage =
+          typeof json.warning === "string"
+            ? json.warning
+            : json.requiresConfig
+              ? missingConfigMessage
+              : ""
+        setConfigWarning(warningMessage)
         const fetchedParents: Parent[] = json.parents ?? []
         setParents(fetchedParents)
 
@@ -260,6 +271,13 @@ function AdminDashboardContent() {
           throw new Error(`entries request failed: ${response.status}`)
         }
         const json = await response.json()
+        const warningMessage =
+          typeof json.warning === "string"
+            ? json.warning
+            : json.requiresConfig
+              ? missingConfigMessage
+              : ""
+        setConfigWarning(warningMessage)
         const fetchedEntries: Entry[] = json.entries ?? []
         setEntries(fetchedEntries)
 
@@ -486,6 +504,13 @@ function AdminDashboardContent() {
           credentials: "include",
         })
         const json = await reload.json().catch(() => ({}))
+        const warningMessage =
+          typeof json.warning === "string"
+            ? json.warning
+            : json.requiresConfig
+              ? missingConfigMessage
+              : ""
+        setConfigWarning(warningMessage)
         const fetchedEntries: Entry[] = json.entries ?? []
         setEntries(fetchedEntries)
         setSelectedEntryId(savedId)
@@ -535,6 +560,13 @@ function AdminDashboardContent() {
         credentials: "include",
       })
       const json = await responseEntries.json().catch(() => ({}))
+      const warningMessage =
+        typeof json.warning === "string"
+          ? json.warning
+          : json.requiresConfig
+            ? missingConfigMessage
+            : ""
+      setConfigWarning(warningMessage)
       const fetchedEntries: Entry[] = json.entries ?? []
       setEntries(fetchedEntries)
       setSelectedEntryId(currentEntry.id)
@@ -580,6 +612,11 @@ function AdminDashboardContent() {
       {message && (
         <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
           {message}
+        </div>
+      )}
+      {configWarning && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {configWarning}
         </div>
       )}
 

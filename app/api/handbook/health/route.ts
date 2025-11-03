@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 
-import { atList } from '../../../../lib/airtable';
+import { AirtableConfigError, atList, isAirtableConfigured } from '../../../../lib/airtable';
 
 function requireEnv(key: string) {
-  const value = process.env[key];
+  const value = process.env[key]?.trim();
   if (!value) {
-    throw new Error(`Missing required env var ${key}`);
+    throw new AirtableConfigError(`Missing required env var ${key}`);
   }
   return value;
 }
@@ -44,6 +44,17 @@ export async function GET() {
       entries: { table: entriesTable, sampleCount: entriesCount },
     });
   } catch (error) {
+    if (error instanceof AirtableConfigError) {
+      console.warn('[health] Airtable not configured', error.message);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: error.message,
+          configured: isAirtableConfigured(),
+        },
+        { status: 200 },
+      );
+    }
     console.error('[health] Airtable connectivity check failed', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
