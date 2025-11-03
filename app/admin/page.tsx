@@ -151,10 +151,6 @@ function AdminDashboardContent() {
       return
     }
 
-    if (!selectedEntryId || !entries.some((entry) => entry.id === selectedEntryId)) {
-      setSelectedEntryId(entries[0].id)
-    }
-
     if (shouldCreateEntry) {
       setEntryForm({
         ...emptyEntryForm,
@@ -163,6 +159,15 @@ function AdminDashboardContent() {
       })
       setSelectedEntryId("")
       setShouldCreateEntry(false)
+      return
+    }
+
+    if (selectedEntryId === "") {
+      return
+    }
+
+    if (!selectedEntryId || !entries.some((entry) => entry.id === selectedEntryId)) {
+      setSelectedEntryId(entries[0].id)
     }
   }, [entries, requestedEntryId, shouldCreateEntry, selectedParentId, selectedEntryId])
 
@@ -500,6 +505,7 @@ function AdminDashboardContent() {
       parentId: selectedParent?.id,
       status: "Draft",
     })
+    setShouldCreateEntry(true)
   }
 
   async function deleteEntryById(entryId: string) {
