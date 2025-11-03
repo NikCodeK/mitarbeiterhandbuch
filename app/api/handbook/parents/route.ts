@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { AirtableConfigError, atCreate, atList, atUpdate } from '../../../../lib/airtable';
+import { AirtableConfigError, AirtableRateLimitError, atCreate, atList, atUpdate } from '../../../../lib/airtable';
 import type { Parent } from '../../../../lib/types';
 import { verify } from '../../../../lib/auth';
 
@@ -77,6 +77,18 @@ export async function GET() {
         { status: 200 },
       );
     }
+    if (error instanceof AirtableRateLimitError) {
+      console.warn('[parents] rate limited', error.message);
+      return NextResponse.json(
+        {
+          parents: [],
+          warning: 'Airtable-Rate-Limit erreicht. Bitte kurz warten und erneut versuchen.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 200 },
+      );
+    }
     console.error('[parents] failed to load data', error);
     const message = error instanceof Error
       ? error.message
@@ -137,6 +149,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: error.message, requiresConfig: true },
         { status: 503 },
+      );
+    }
+    if (error instanceof AirtableRateLimitError) {
+      return NextResponse.json(
+        {
+          error: 'Airtable-Rate-Limit erreicht. Bitte später erneut speichern.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 429 },
       );
     }
     console.error('[parents] failed to save data', error);

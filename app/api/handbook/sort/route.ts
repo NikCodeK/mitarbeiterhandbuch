@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { AirtableConfigError, atUpdate } from '../../../../lib/airtable';
+import { AirtableConfigError, AirtableRateLimitError, atUpdate } from '../../../../lib/airtable';
 import { verify } from '../../../../lib/auth';
 
 const PARENT_TABLE = process.env.AIRTABLE_PARENTS;
@@ -62,6 +62,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: error.message, requiresConfig: true },
         { status: 503 },
+      );
+    }
+    if (error instanceof AirtableRateLimitError) {
+      return NextResponse.json(
+        {
+          error: 'Airtable-Rate-Limit erreicht. Bitte versuche es später erneut.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 429 },
       );
     }
     console.error('[sort] failed to swap order', error);

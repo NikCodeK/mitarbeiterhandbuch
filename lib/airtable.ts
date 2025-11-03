@@ -5,12 +5,25 @@ export class AirtableConfigError extends Error {
   }
 }
 
+export class AirtableRateLimitError extends Error {
+  retryAfter?: number;
+
+  constructor(message: string, retryAfter?: number) {
+    super(message);
+    this.name = 'AirtableRateLimitError';
+    this.retryAfter = retryAfter;
+  }
+}
+
 type AirtableConfig = {
   baseUrl: string;
   headers: Record<string, string>;
 };
 
 let cachedConfig: AirtableConfig | null = null;
+
+const MAX_RETRY_ATTEMPTS = 3;
+const FALLBACK_RETRY_DELAY_MS = 1000;
 
 function resolveConfig(): AirtableConfig {
   if (cachedConfig) {
@@ -55,9 +68,48 @@ type QueryMap = Record<string, QueryValue>;
 const encode = (value: string) => encodeURIComponent(value);
 const tableName = (name: string) => encode(name);
 
-async function readJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const asNumber = Number(value);
+  if (Number.isFinite(asNumber) && asNumber >= 0) {
+    return asNumber;
+  }
+  const date = Date.parse(value);
+  if (Number.isFinite(date)) {
+    const delta = date - Date.now();
+    return delta > 0 ? delta / 1000 : 0;
+  }
+  return undefined;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readJson<T>(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  attempt = 1,
+): Promise<T> {
   const response = await fetch(input, init);
   if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfterSeconds = parseRetryAfter(response.headers.get('retry-after'));
+      if (attempt < MAX_RETRY_ATTEMPTS) {
+        const retryDelayMs = (retryAfterSeconds ?? 0) > 0
+          ? retryAfterSeconds * 1000
+          : FALLBACK_RETRY_DELAY_MS * attempt;
+        await delay(retryDelayMs);
+        return readJson<T>(input, init, attempt + 1);
+      }
+      throw new AirtableRateLimitError(
+        '[Airtable] 429 - Too Many Requests',
+        retryAfterSeconds,
+      );
+    }
+
     let detail = '';
     try {
       const payload = await response.json();

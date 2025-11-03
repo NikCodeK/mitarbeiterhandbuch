@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { AirtableConfigError, atGet, atUpdate } from '../../../../../lib/airtable';
+import { AirtableConfigError, AirtableRateLimitError, atGet, atUpdate } from '../../../../../lib/airtable';
 import { verify } from '../../../../../lib/auth';
 import type { Entry } from '../../../../../lib/types';
 
@@ -67,6 +67,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         { status: 200 },
       );
     }
+    if (error instanceof AirtableRateLimitError) {
+      return NextResponse.json(
+        {
+          entry: null,
+          warning: 'Airtable-Rate-Limit erreicht. Bitte kurz warten und erneut versuchen.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 200 },
+      );
+    }
     console.error('[entry] failed to load record', error);
     const message = error instanceof Error ? error.message : 'Unable to load entry';
     return NextResponse.json({ entry: null, error: message }, { status: 200 });
@@ -119,6 +130,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json(
         { error: error.message, requiresConfig: true },
         { status: 503 },
+      );
+    }
+    if (error instanceof AirtableRateLimitError) {
+      return NextResponse.json(
+        {
+          error: 'Airtable-Rate-Limit erreicht. Bitte später erneut speichern.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 429 },
       );
     }
     console.error('[entry] failed to save record', error);

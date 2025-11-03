@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { AirtableConfigError, atList, isAirtableConfigured } from '../../../../lib/airtable';
+import { AirtableConfigError, AirtableRateLimitError, atList, isAirtableConfigured } from '../../../../lib/airtable';
 
 function requireEnv(key: string) {
   const value = process.env[key]?.trim();
@@ -51,6 +51,18 @@ export async function GET() {
           ok: false,
           error: error.message,
           configured: isAirtableConfigured(),
+        },
+        { status: 200 },
+      );
+    }
+    if (error instanceof AirtableRateLimitError) {
+      console.warn('[health] rate limited', error.message);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Airtable-Rate-Limit erreicht. Bitte kurz warten und erneut prüfen.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
         },
         { status: 200 },
       );

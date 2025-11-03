@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { AirtableConfigError, atCreate, atList, atUpdate } from '../../../../lib/airtable';
+import { AirtableConfigError, AirtableRateLimitError, atCreate, atList, atUpdate } from '../../../../lib/airtable';
 import type { Entry } from '../../../../lib/types';
 import { verify } from '../../../../lib/auth';
 
@@ -138,6 +138,18 @@ export async function GET(request: Request) {
         { status: 200 },
       );
     }
+    if (error instanceof AirtableRateLimitError) {
+      console.warn('[entries] rate limited', error.message);
+      return NextResponse.json(
+        {
+          entries: [],
+          warning: 'Airtable-Rate-Limit erreicht. Bitte kurz warten und erneut versuchen.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 200 },
+      );
+    }
     console.error('[entries] failed to load data', error);
     const message = error instanceof Error ? error.message : 'Unable to load entries';
     return NextResponse.json(
@@ -205,6 +217,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: error.message, requiresConfig: true },
         { status: 503 },
+      );
+    }
+    if (error instanceof AirtableRateLimitError) {
+      return NextResponse.json(
+        {
+          error: 'Airtable-Rate-Limit erreicht. Bitte speichere später erneut.',
+          rateLimited: true,
+          retryAfter: error.retryAfter ?? null,
+        },
+        { status: 429 },
       );
     }
     console.error('[entries] failed to save entry', error);
