@@ -140,10 +140,13 @@ export async function GET(request: Request) {
     }
     console.error('[entries] failed to load data', error);
     const message = error instanceof Error ? error.message : 'Unable to load entries';
-    return NextResponse.json({
-      error: message,
-      debug: { env: 'entries', hasApiKey: Boolean(process.env.AIRTABLE_API_KEY), hasBaseId: Boolean(process.env.AIRTABLE_BASE_ID), entriesTable: process.env.AIRTABLE_ENTRIES },
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        entries: [],
+        error: message,
+      },
+      { status: 200 },
+    );
   }
 }
 

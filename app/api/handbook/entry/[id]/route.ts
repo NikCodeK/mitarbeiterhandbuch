@@ -63,12 +63,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   } catch (error) {
     if (error instanceof AirtableConfigError) {
       return NextResponse.json(
-        { error: error.message, requiresConfig: true },
-        { status: 503 },
+        { entry: null, warning: error.message, requiresConfig: true },
+        { status: 200 },
       );
     }
     console.error('[entry] failed to load record', error);
-    return NextResponse.json({ error: 'Unable to load entry' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Unable to load entry';
+    return NextResponse.json({ entry: null, error: message }, { status: 200 });
   }
 }
 

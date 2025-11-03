@@ -60,6 +60,23 @@ function AdminDashboardContent() {
   const missingConfigMessage =
     "Airtable ist nicht konfiguriert. Bitte setze die benötigten Umgebungsvariablen oder verwende lokale Inhalte."
 
+  function extractWarning(payload: unknown) {
+    if (!payload || typeof payload !== "object") {
+      return ""
+    }
+    const data = payload as Record<string, unknown>
+    if (typeof data.warning === "string" && data.warning.trim()) {
+      return data.warning
+    }
+    if (typeof data.error === "string" && data.error.trim()) {
+      return data.error
+    }
+    if (data.requiresConfig) {
+      return missingConfigMessage
+    }
+    return ""
+  }
+
   const [message, setMessage] = useState<string>("")
   const [configWarning, setConfigWarning] = useState<string>("")
   const [requestedParentId, setRequestedParentId] = useState<string | null>(null)
@@ -200,13 +217,7 @@ function AdminDashboardContent() {
           throw new Error(`parents request failed: ${response.status}`)
         }
         const json = await response.json()
-        const warningMessage =
-          typeof json.warning === "string"
-            ? json.warning
-            : json.requiresConfig
-              ? missingConfigMessage
-              : ""
-        setConfigWarning(warningMessage)
+        setConfigWarning(extractWarning(json))
         const fetchedParents: Parent[] = json.parents ?? []
         setParents(fetchedParents)
 
@@ -271,13 +282,7 @@ function AdminDashboardContent() {
           throw new Error(`entries request failed: ${response.status}`)
         }
         const json = await response.json()
-        const warningMessage =
-          typeof json.warning === "string"
-            ? json.warning
-            : json.requiresConfig
-              ? missingConfigMessage
-              : ""
-        setConfigWarning(warningMessage)
+        setConfigWarning(extractWarning(json))
         const fetchedEntries: Entry[] = json.entries ?? []
         setEntries(fetchedEntries)
 
@@ -317,6 +322,7 @@ function AdminDashboardContent() {
           throw new Error(`entry request failed: ${response.status}`)
         }
         const json = await response.json()
+        setConfigWarning(extractWarning(json))
         const entry: Entry | undefined = json.entry
         setEntryForm({
           id: entry?.id,
@@ -504,13 +510,7 @@ function AdminDashboardContent() {
           credentials: "include",
         })
         const json = await reload.json().catch(() => ({}))
-        const warningMessage =
-          typeof json.warning === "string"
-            ? json.warning
-            : json.requiresConfig
-              ? missingConfigMessage
-              : ""
-        setConfigWarning(warningMessage)
+        setConfigWarning(extractWarning(json))
         const fetchedEntries: Entry[] = json.entries ?? []
         setEntries(fetchedEntries)
         setSelectedEntryId(savedId)
@@ -560,13 +560,7 @@ function AdminDashboardContent() {
         credentials: "include",
       })
       const json = await responseEntries.json().catch(() => ({}))
-      const warningMessage =
-        typeof json.warning === "string"
-          ? json.warning
-          : json.requiresConfig
-            ? missingConfigMessage
-            : ""
-      setConfigWarning(warningMessage)
+      setConfigWarning(extractWarning(json))
       const fetchedEntries: Entry[] = json.entries ?? []
       setEntries(fetchedEntries)
       setSelectedEntryId(currentEntry.id)

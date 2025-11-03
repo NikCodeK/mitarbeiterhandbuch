@@ -85,10 +85,10 @@ export async function GET() {
         : JSON.stringify(error);
     return NextResponse.json(
       {
+        parents: [],
         error: message,
-        hint: 'Check Airtable table name and field permissions on the Vercel environment.',
       },
-      { status: 500 },
+      { status: 200 },
     );
   }
 }
