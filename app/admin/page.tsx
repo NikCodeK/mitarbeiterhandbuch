@@ -97,6 +97,7 @@ function AdminDashboardContent() {
   const [isDeletingParent, setIsDeletingParent] = useState(false)
   const [isDeletingEntry, setIsDeletingEntry] = useState(false)
   const selectedEntryIdRef = useRef<string>("")
+  const selectedParentIdRef = useRef<string>("")
 
   const selectedParent = useMemo(
     () => parents.find((parent) => parent.id === selectedParentId) ?? null,
@@ -125,6 +126,10 @@ function AdminDashboardContent() {
   useEffect(() => {
     selectedEntryIdRef.current = selectedEntryId
   }, [selectedEntryId])
+
+  useEffect(() => {
+    selectedParentIdRef.current = selectedParentId
+  }, [selectedParentId])
 
   useEffect(() => {
     if (!entries.length) {
@@ -242,24 +247,32 @@ function AdminDashboardContent() {
           return
         }
 
+    const latestSelected = selectedParentIdRef.current
+    const desiredId = preferId || requestedParentId || latestSelected || fetchedParents[0]?.id
     const target =
-      fetchedParents.find((parent) => parent.id === (preferId || requestedParentId || selectedParentId)) ??
+      fetchedParents.find((parent) => parent.id === desiredId) ??
       fetchedParents[0]
 
-    setRequestedParentId(null)
-    setSelectedParentId(target.id)
-    setParentForm({
-      id: target.id,
-      slug: target.slug,
-      title: target.title,
-      sort: target.sort !== undefined && target.sort !== null ? String(target.sort) : "",
-      published: target.published ?? true,
-    })
+    if (requestedParentId && target) {
+      setRequestedParentId(null)
+    }
+    if (target && target.id !== latestSelected) {
+      setSelectedParentId(target.id)
+    }
+    if (target) {
+      setParentForm({
+        id: target.id,
+        slug: target.slug,
+        title: target.title,
+        sort: target.sort !== undefined && target.sort !== null ? String(target.sort) : "",
+        published: target.published ?? true,
+      })
 
-    setEntryForm((prev) => ({
-      ...prev,
-      parentId: target.id,
-    }))
+      setEntryForm((prev) => ({
+        ...prev,
+        parentId: target.id,
+      }))
+    }
       } catch (error) {
         console.error("Failed to load parents", error)
         setMessage("Elternabschnitte konnten nicht geladen werden.")
